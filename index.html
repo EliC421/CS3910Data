@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iowa Data Visualization</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header>
+        <h1>Iowa Data Visualization</h1>
+        <nav>
+            <ul>
+                <li><a href="#map">Map View</a></li>
+                <li><a href="#data">Data</a></li>
+                <li><a href="#about">About</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section id="map-section">
+            <div id="map-controls">
+                <div class="toggle-group">
+                    <h3>Data Layers</h3>
+                    <label><input type="checkbox" id="toggle-liquor" checked> Liquor Sales</label>
+                    <label><input type="checkbox" id="toggle-dui" checked> DUI Charges</label>
+                    <label><input type="checkbox" id="toggle-offenders"> Sex Offenders</label>
+                    <label><input type="checkbox" id="toggle-alerts"> Amber Alerts</label>
+                </div>
+            </div>
+            <div id="map"></div>
+        </section>
+
+        <section id="data-section">
+            <h2>Data Visualizations</h2>
+            <div id="charts-container">
+                <!-- Charts will be dynamically inserted here -->
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Iowa Data Visualization Project</p>
+        <p>Team: Vanessa Banks, Eli Chow, Samsam Mohamed</p>
+    </footer>
+
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap" async defer></script>
+    
+    <!-- Application Scripts -->
+    <script src="js/map.js"></script>
+    <script src="js/data-processor.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
