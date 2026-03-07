@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Processing Test Page</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #003f87;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        button {
+            background-color: #003f87;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #005bb5;
+        }
+        
+        .console-output {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSV Data Processing Test Page</h1>
+    <p>Use this page to test CSV parsing, validation, and correlation analysis.</p>
+
+    <div class="test-section">
+        <h2>1. Load CSV File</h2>
+        <input type="file" id="csvFile" accept=".csv">
+        <select id="datasetType">
+            <option value="liquor">Liquor Sales</option>
+            <option value="dui">DUI Charges</option>
+            <option value="offenders">Sex Offenders</option>
+            <option value="alerts">Amber Alerts</option>
+        </select>
+        <button onclick="loadCSVFile()">Load & Parse CSV</button>
+        <div id="loadStatus"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Validate Data</h2>
+        <p>Validate the loaded dataset for structure and quality.</p>
+        <button onclick="validateData()">Run Validation</button>
+        <div id="validationStatus"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Geographic Data</h2>
+        <p>Extract and display geographic coordinates from the dataset.</p>
+        <button onclick="extractGeoData()">Extract Coordinates</button>
+        <div id="geoStatus"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Test Correlation (Sample Data)</h2>
+        <p>Test correlation analysis with sample data.</p>
+        <button onclick="testCorrelation()">Run Correlation Test</button>
+        <div id="correlationStatus"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Console Output</h2>
+        <button onclick="clearConsole()">Clear Console</button>
+        <div id="consoleOutput" class="console-output">
+Console ready. Load a CSV file to begin testing.
+        </div>
+    </div>
+
+    <!-- Load all the data processing scripts -->
+    <script src="js/data-processor.js"></script>
+    <script src="js/data-validator.js"></script>
+    <script src="js/geocode-helper.js"></script>
+    <script src="js/correlation-analyzer.js"></script>
+
+    <script>
+        // Override console.log to display in UI
+        const originalLog = console.log;
+        const consoleOutput = document.getElementById('consoleOutput');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            consoleOutput.textContent += message + '\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+
+        let currentDataset = null;
+        let currentDatasetName = null;
+
+        // Load CSV file from file input
+        function loadCSVFile() {
+            const fileInput = document.getElementById('csvFile');
+            const datasetType = document.getElementById('datasetType').value;
+            const statusDiv = document.getElementById('loadStatus');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showStatus(statusDiv, 'Please select a CSV file', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    console.log(`\nLoading ${file.name}...`);
+                    const csvText = e.target.result;
+                    const parsedData = dataProcessor.parseCSV(csvText);
+                    
+                    currentDataset = parsedData;
+                    currentDatasetName = datasetType;
+                    dataProcessor.datasets[datasetType] = parsedData;
+                    
+                    console.log(`Loaded ${parsedData.length} rows`);
+                    console.log(`Columns: ${Object.keys(parsedData[0]).join(', ')}`);
+                    
+                    showStatus(statusDiv, `Successfully loaded ${parsedData.length} rows`, 'success');
+                } catch (error) {
+                    console.error('Error parsing CSV:', error);
+                    showStatus(statusDiv, 'Error parsing CSV: ' + error.message, 'error');
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        // Validate current dataset
+        function validateData() {
+            const statusDiv = document.getElementById('validationStatus');
+            
+            if (!currentDataset || !currentDatasetName) {
+                showStatus(statusDiv, 'Please load a dataset first', 'error');
+                return;
+            }
+
+            console.log('\n--- Starting Validation ---');
+            const result = dataValidator.validateDataset(currentDatasetName, currentDataset);
+            dataValidator.generateReport(result);
+            
+            if (result.valid) {
+                showStatus(statusDiv, 'Validation passed!', 'success');
+            } else {
+                showStatus(statusDiv, 'Validation failed. Check console for details.', 'error');
+            }
+        }
+
+        // Extract geographic data
+        function extractGeoData() {
+            const statusDiv = document.getElementById('geoStatus');
+            
+            if (!currentDataset || !currentDatasetName) {
+                showStatus(statusDiv, 'Please load a dataset first', 'error');
+                return;
+            }
+
+            console.log('\n--- Extracting Geographic Data ---');
+            
+            // Try common column name variations
+            const latFields = ['Latitude', 'latitude', 'lat', 'Lat'];
+            const lngFields = ['Longitude', 'longitude', 'lng', 'Lng', 'lon', 'Lon'];
+            
+            let latField = latFields.find(f => currentDataset[0][f] !== undefined);
+            let lngField = lngFields.find(f => currentDataset[0][f] !== undefined);
+
+            if (!latField || !lngField) {
+                console.log('No geographic columns found. Available columns:');
+                console.log(Object.keys(currentDataset[0]).join(', '));
+                showStatus(statusDiv, 'No latitude/longitude columns found', 'error');
+                return;
+            }
+
+            const geoData = dataProcessor.extractGeoData(currentDatasetName, latField, lngField);
+            
+            console.log(`Extracted ${geoData.length} points with valid coordinates`);
+            console.log(`Sample:`);
+            console.log(geoData.slice(0, 3));
+            
+            showStatus(statusDiv, `Extracted ${geoData.length} geographic points`, 'success');
+        }
+
+        // Test correlation with sample data
+        function testCorrelation() {
+            const statusDiv = document.getElementById('correlationStatus');
+
+            console.log('\n--- Testing Correlation Analysis ---');
+            
+            // Create sample datasets
+            const sampleData1 = [
+                { County: 'Polk', value: 150 },
+                { County: 'Linn', value: 120 },
+                { County: 'Scott', value: 90 },
+                { County: 'Johnson', value: 85 },
+                { County: 'Black Hawk', value: 70 }
+            ];
+
+            const sampleData2 = [
+                { County: 'Polk', value: 300 },
+                { County: 'Linn', value: 240 },
+                { County: 'Scott', value: 180 },
+                { County: 'Johnson', value: 170 },
+                { County: 'Black Hawk', value: 140 }
+            ];
+
+            const result = correlationAnalyzer.correlateByCounty(
+                sampleData1, sampleData2, 'value', 'value'
+            );
+
+            correlationAnalyzer.generateReport(result, 'Dataset 1', 'Dataset 2');
+            
+            showStatus(statusDiv, 
+                `Correlation: ${result.coefficient.toFixed(3)} (${result.strength})`, 
+                'success'
+            );
+        }
+
+        // Clear console
+        function clearConsole() {
+            consoleOutput.textContent = 'Console cleared.\n';
+        }
+
+        // Show status message
+        function showStatus(element, message, type) {
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+    </script>
+</body>
+</html>
