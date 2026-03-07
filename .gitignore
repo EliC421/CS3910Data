@@ -1,0 +1,33 @@
+# Large data files
+data/*.csv
+data/processed/*
+!data/README.md
+
+# API Keys
+**/config.js
+**/*-config.js
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (if using npm later)
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+dist/
+build/
