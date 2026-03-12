@@ -15,6 +15,10 @@ class DataProcessor {
     async loadCSV(filename, datasetName) {
         try {
             const response = await fetch(`data/${filename}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} while loading data/${filename}`);
+            }
+
             const csvText = await response.text();
             const parsedData = this.parseCSV(csvText);
             this.datasets[datasetName] = parsedData;
@@ -59,18 +63,25 @@ class DataProcessor {
 
         for (let i = 0; i < line.length; i++) {
             const char = line[i];
+            const nextChar = line[i + 1];
 
-            if (char === '"') {
+            if (char === '"' && nextChar === '"') {
+                // Handle escaped quotes ("")
+                currentValue += '"';
+                i++; // Skip next quote
+            } else if (char === '"') {
+                // Toggle quote state
                 inQuotes = !inQuotes;
             } else if (char === ',' && !inQuotes) {
-                values.push(currentValue.trim());
+                // End of field
+                values.push(currentValue);
                 currentValue = '';
             } else {
                 currentValue += char;
             }
         }
 
-        values.push(currentValue.trim());
+        values.push(currentValue);
         return values;
     }
 
@@ -151,6 +162,57 @@ class DataProcessor {
         });
 
         return aggregated;
+    }
+
+    /**
+     * Normalize county totals by population and return rates per 100k.
+     */
+    normalizeByPopulation(countyTotals, populationDatasetName, options = {}) {
+        const {
+            countyField = 'County',
+            populationField = 'Population',
+            outputRatePer = 100000
+        } = options;
+
+        const populationData = this.datasets[populationDatasetName];
+        if (!populationData) {
+            console.error(`Population dataset ${populationDatasetName} not found`);
+            return [];
+        }
+
+        const toCountyKey = (value) => String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/\s+county$/, '')
+            .replace(/\s+/g, ' ');
+
+        const populationByCounty = {};
+
+        populationData.forEach(row => {
+            const rawCounty = row[countyField] || row.county || row.COUNTY;
+            const countyKey = toCountyKey(rawCounty);
+            if (!countyKey) return;
+
+            const population = parseFloat(
+                row[populationField] || row.population || row.POPULATION
+            );
+
+            if (!Number.isFinite(population) || population <= 0) return;
+            populationByCounty[countyKey] = population;
+        });
+
+        return Object.entries(countyTotals).map(([county, total]) => {
+            const countyKey = toCountyKey(county);
+            const population = populationByCounty[countyKey] || null;
+            const numericTotal = Number(total) || 0;
+
+            return {
+                county,
+                total: numericTotal,
+                population,
+                ratePer100k: population ? (numericTotal / population) * outputRatePer : null
+            };
+        });
     }
 }
 
