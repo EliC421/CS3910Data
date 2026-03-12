@@ -81,3 +81,13 @@ TBD: GitHub Pages, Vercel, or AWS
 
 ## License
 MIT
+
+## Backend
+Load data separately
+
+
+## Normalize
+Normalize by population
+
+## Filter
+Filter out outliers so its not skewed

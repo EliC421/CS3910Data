@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>County Metric Test Visualization</title>
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --surface: #ffffff;
+            --ink: #1f2a37;
+            --muted: #5b6b7f;
+            --primary: #1d5fa8;
+            --bar: #2a77c9;
+            --border: #d9e2ec;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 100%);
+            color: var(--ink);
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            color: #0f3e75;
+        }
+
+        .subtitle {
+            margin: 0 0 18px;
+            color: var(--muted);
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+            margin-bottom: 16px;
+        }
+
+        .controls {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            align-items: end;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        select,
+        input[type="range"] {
+            width: 100%;
+        }
+
+        select {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            background: #fcfdff;
+        }
+
+        .card .label {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .card .value {
+            margin-top: 4px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #0b4f93;
+        }
+
+        .chart {
+            display: grid;
+            gap: 8px;
+        }
+
+        .bar-row {
+            display: grid;
+            grid-template-columns: 170px 1fr 110px;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .county {
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bar-shell {
+            height: 22px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #f3f7fb;
+            overflow: hidden;
+        }
+
+        .bar {
+            height: 100%;
+            background: linear-gradient(90deg, #2e7bcf, #4e9be7);
+        }
+
+        .metric {
+            font-size: 13px;
+            text-align: right;
+            color: #1b3d67;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .note {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .error {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #f2b8b5;
+            background: #fff1f0;
+            color: #8b1d13;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <h1>County-Year Metrics (Test Visualization)</h1>
+    <p class="subtitle">Reads data/processed/county_year_normalized.csv. Use this for weekly validation without full app wiring.</p>
+
+    <div id="error" class="error" style="display:none;"></div>
+
+    <div class="panel controls">
+        <div>
+            <label for="yearSelect">Year</label>
+            <select id="yearSelect"></select>
+        </div>
+        <div>
+            <label for="metricSelect">Metric</label>
+            <select id="metricSelect">
+                <option value="crashes_per_100k">Crashes per 100k</option>
+                <option value="impaired_crashes_per_100k">Impaired Crashes per 100k</option>
+                <option value="owi_probation_per_100k">OWI Probation Cases per 100k</option>
+                <option value="unemployment_rate">Unemployment Rate</option>
+                <option value="median_household_income">Median Household Income</option>
+                <option value="liquor_dollars_per_100k">Liquor Sales ($/100k)</option>
+            </select>
+        </div>
+        <div>
+            <label for="topN">Top Counties: <span id="topNValue">20</span></label>
+            <input id="topN" type="range" min="5" max="40" value="20" step="1">
+        </div>
+    </div>
+
+    <div class="panel summary" id="summary"></div>
+
+    <div class="panel">
+        <div id="chart" class="chart"></div>
+    </div>
+
+    <div class="panel note">
+        Run: node scripts/prepare-datasets.js &nbsp;|&nbsp;
+        Crashes: 2000–2025 &nbsp;|&nbsp; OWI Probation: 2016–2022 &nbsp;|&nbsp; Unemployment: multi-year &nbsp;|&nbsp; Income: 2012–2023 &nbsp;|&nbsp; Liquor Sales: 2024+
+    </div>
+</div>
+
+<script>
+    const DATA_PATH = 'data/processed/county_year_normalized.csv';
+    const yearSelect = document.getElementById('yearSelect');
+    const metricSelect = document.getElementById('metricSelect');
+    const topN = document.getElementById('topN');
+    const topNValue = document.getElementById('topNValue');
+    const chart = document.getElementById('chart');
+    const summary = document.getElementById('summary');
+    const errorBox = document.getElementById('error');
+
+    let rows = [];
+
+    function parseCsvLine(line) {
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            const next = line[i + 1];
+
+            if (ch === '"' && next === '"') {
+                current += '"';
+                i++;
+            } else if (ch === '"') {
+                inQuotes = !inQuotes;
+            } else if (ch === ',' && !inQuotes) {
+                values.push(current);
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+
+        values.push(current);
+        return values;
+    }
+
+    function parseCsv(text) {
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const headers = parseCsvLine(lines[0]);
+        return lines.slice(1).map((line) => {
+            const values = parseCsvLine(line);
+            const row = {};
+            headers.forEach((h, i) => {
+                row[h] = values[i] || '';
+            });
+            return row;
+        });
+    }
+
+    function toNumber(value) {
+        if (value === '' || value === null || value === undefined) return null;
+        const n = Number(String(value).replace(/,/g, ''));
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function setError(message) {
+        errorBox.style.display = 'block';
+        errorBox.textContent = message;
+    }
+
+    function clearError() {
+        errorBox.style.display = 'none';
+        errorBox.textContent = '';
+    }
+
+    function render() {
+        const year = Number(yearSelect.value);
+        const metric = metricSelect.value;
+        const n = Number(topN.value);
+
+        const yearRows = rows
+            .filter((r) => Number(r.year) === year)
+            .map((r) => ({ ...r, metricValue: toNumber(r[metric]) }))
+            .filter((r) => r.metricValue !== null)
+            .sort((a, b) => b.metricValue - a.metricValue)
+            .slice(0, n);
+
+        const metricLabel = metricSelect.options[metricSelect.selectedIndex].text;
+        const max = yearRows.length ? yearRows[0].metricValue : 0;
+
+        const avg = yearRows.length
+            ? yearRows.reduce((sum, r) => sum + r.metricValue, 0) / yearRows.length
+            : 0;
+
+        summary.innerHTML = [
+            ['Year', year],
+            ['Metric', metricLabel],
+            ['Counties Shown', yearRows.length],
+            ['Top Value', max ? max.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'],
+            ['Average (Top N)', avg ? avg.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-']
+        ].map(([label, value]) => (
+            '<div class="card"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>'
+        )).join('');
+
+        if (yearRows.length === 0) {
+            chart.innerHTML = '<p class="note">No rows available for this selection.</p>';
+            return;
+        }
+
+        chart.innerHTML = yearRows.map((row) => {
+            const width = max ? Math.max(1, (row.metricValue / max) * 100) : 1;
+            return (
+                '<div class="bar-row">' +
+                    '<div class="county">' + row.county + '</div>' +
+                    '<div class="bar-shell"><div class="bar" style="width:' + width.toFixed(2) + '%"></div></div>' +
+                    '<div class="metric">' + row.metricValue.toLocaleString(undefined, { maximumFractionDigits: 2 }) + '</div>' +
+                '</div>'
+            );
+        }).join('');
+    }
+
+    async function initialize() {
+        clearError();
+        try {
+            const response = await fetch(DATA_PATH);
+            if (!response.ok) {
+                throw new Error('Could not load ' + DATA_PATH + ' (HTTP ' + response.status + ').');
+            }
+
+            const csvText = await response.text();
+            rows = parseCsv(csvText);
+
+            const years = [...new Set(rows.map((r) => Number(r.year)).filter((y) => Number.isFinite(y)))].sort((a, b) => b - a);
+            if (!years.length) {
+                throw new Error('No year values found in processed CSV.');
+            }
+
+            yearSelect.innerHTML = years.map((y) => '<option value="' + y + '">' + y + '</option>').join('');
+            // Default to the year with the most complete metric coverage across all 5 key fields
+            const coverageMetrics = ['crashes_per_100k', 'owi_probation_per_100k', 'unemployment_rate', 'median_household_income', 'liquor_dollars_per_100k'];
+            const bestYear = years.reduce((best, y) => {
+                const yearRows = rows.filter((r) => Number(r.year) === y);
+                const score = coverageMetrics.reduce((s, m) => s + (yearRows.some((r) => toNumber(r[m]) > 0) ? 1 : 0), 0);
+                return score > best.score ? { year: y, score } : best;
+            }, { year: years[0], score: -1 }).year;
+            yearSelect.value = String(bestYear);
+
+            render();
+        } catch (err) {
+            setError(err.message + ' Run node scripts/prepare-datasets.js and reload this page.');
+        }
+    }
+
+    yearSelect.addEventListener('change', render);
+    metricSelect.addEventListener('change', render);
+    topN.addEventListener('input', () => {
+        topNValue.textContent = topN.value;
+        render();
+    });
+
+    initialize();
+</script>
+</body>
+</html>
