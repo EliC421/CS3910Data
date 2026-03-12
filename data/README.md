@@ -13,6 +13,7 @@ Place the CSV files downloaded from Iowa.gov data here:
 - `amber-alerts.csv` - Amber alert records
 - `incarceration.csv` - Incarceration data (optional)
 - `school-proficiency.csv` - Math and reading proficiency data (optional)
+- `IowaCounties.geojson` - Iowa county boundaries, found [here](https://geodata.iowa.gov/datasets/eb0503fcd0164483abffaffe8db8870c_0/explore?location=41.964471%2C-90.768443%2C6)
 
 ### Processed Data
 Processed and cleaned data files will be stored here:

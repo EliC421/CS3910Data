@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iowa Counties Map</title>
+    <style>
+      /* the map size */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <!-- this is the map itself -->
+  <body>
+    <div id="map"></div>
+
+    <script>
+      function initMap() {
+        console.log("initMap started");
+
+        const map = new google.maps.Map(document.getElementById("map"), {
+          //   map style
+          mapTypeId: "terrain",
+        });
+        //   more map styles
+        map.data.setStyle({
+          fillColor: "#4285F4",
+          strokeColor: "#000000",
+          strokeWeight: 0.5,
+          fillOpacity: 0.2,
+        });
+
+        map.data.loadGeoJson(
+          "data/IowaCounties.geojson",
+          null,
+          //   console logs for error catching
+          function (features) {
+            console.log("GeoJSON loaded");
+            console.log("Feature count:", features.length);
+
+            if (!features || !features.length) {
+              console.log("No features found in GeoJSON");
+              return;
+            }
+
+            // zooming the map to fit iowa automatically
+            const bounds = new google.maps.LatLngBounds();
+
+            // loop through all counties
+            features.forEach((feature) => {
+              processPoints(feature.getGeometry(), bounds);
+            });
+
+            // fit the map
+            map.fitBounds(bounds);
+          },
+        );
+
+        // click on a county to display name
+        map.data.addListener("click", (event) => {
+          const countyName =
+            event.feature.getProperty("NAME") ||
+            event.feature.getProperty("name") ||
+            event.feature.getProperty("County") ||
+            "Unknown county";
+
+          alert("County: " + countyName);
+        });
+      }
+
+      // goes through county shape points
+      function processPoints(geometry, bounds) {
+        if (geometry instanceof google.maps.LatLng) {
+          bounds.extend(geometry);
+        } else if (geometry instanceof google.maps.Data.Point) {
+          bounds.extend(geometry.get());
+        } else {
+          geometry.getArray().forEach((g) => {
+            processPoints(g, bounds);
+          });
+        }
+      }
+
+      //   make the function accessable to Maps API
+      window.initMap = initMap;
+    </script>
+
+    <!-- Google Maps API -->
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC59MCMqdD5XZZw0NYt63Osr4AYld6wXD8&callback=initMap"
+      async
+      defer
+    ></script>
+  </body>
+</html>
