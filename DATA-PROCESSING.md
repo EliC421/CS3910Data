@@ -5,23 +5,27 @@ This branch contains tools and scripts for processing Iowa government CSV data.
 ## Data Processing Workflow
 
 1. **Download Data**
-   - Download CSV files from Iowa.gov data portal
-   - Place files in the `data/` directory
+   - Download required CSV files and county geometry
+   - Place files in the `data/` directory using project-standard names
+   - Required for v1: crash CSV, county population CSV, county boundaries GeoJSON
 
 2. **Validate Data**
    - Run validation scripts to check data integrity
    - Verify required columns exist
-   - Check for geographic coordinates
+   - Check geographic coordinates and county-name consistency
 
 3. **Clean Data**
    - Remove duplicates
    - Handle missing values
    - Normalize formats
+   - Normalize county keys (case-insensitive, drop `County` suffix)
 
 4. **Transform Data**
    - Extract geographic coordinates
    - Aggregate by county/region
    - Calculate statistics
+   - Calculate population-normalized rates:
+     - `ratePer100k = (countyTotal / countyPopulation) * 100000`
 
 5. **Export Data**
    - Generate processed files for visualization
@@ -29,26 +33,49 @@ This branch contains tools and scripts for processing Iowa government CSV data.
 
 ## CSV File Requirements
 
-### Liquor Sales Data
-- Required columns: Location, County, Latitude, Longitude, Sales Amount
-- Download from: [Iowa ABD Data](https://data.iowa.gov/)
+### Crash Data (Required)
+- File: `Vehicle_Crashes_in_Iowa_20260307.csv`
+- Required columns: `County Name`, `Date of Crash`, `Crash Severity`, `Number of Fatalities`, `Number of Injuries`, `Location`
 
-### DUI Charges Data
-- Required columns: County, Date, Latitude, Longitude, Charge Type
-- Download from: Iowa criminal justice data portal
+### County Population Data (Required for normalization)
+- File: `county-population.csv`
+- Required columns: `County`, `Population`
+- Optional columns: `Year`, `Source`
 
-### Sex Offenders Registry
-- Required columns: County, Latitude, Longitude, Offense Type
-- **Note**: Handle sensitive data carefully, anonymize if needed
+### County Boundaries (Required)
+- File: `IowaCounties.geojson`
+- Required geometry: county polygons with county name property
 
-### Amber Alerts (Optional)
-- Required columns: County, Date, Latitude, Longitude, Status
+### DUI Charges Data (Recommended)
+- File: `dui-charges.csv`
+- Required columns: county field and count/incident field
+
+### Liquor Sales Data (Recommended)
+- File: `liquor-sales.csv`
+- Required columns: county field and sales amount
+
+### Incarceration Data (Recommended)
+- File: `incarceration.csv`
+- Required columns: county field and count metric
+
+### Unemployment Data (Recommended)
+- File: `unemployment-rate-by-county.csv`
+- Required columns: `County` and either unemployment rate or unemployed/labor-force columns
+
+### Income Data (Recommended)
+- File: `median-household-income-by-county.csv`
+- Required columns: `County`, median household income metric
+
+### Restricted Datasets
+- Sex offender and amber alert datasets can be access-restricted and may not support bulk download.
+- If unavailable, do not block analysis; proceed with public county-level socioeconomic and justice datasets.
 
 ## Scripts
 
 - `data-validator.js` - Validate CSV structure and content
 - `geocode-helper.js` - Helper functions for geocoding addresses
-- `correlation-analysis.js` - Calculate correlations between datasets
+- `correlation-analyzer.js` - Calculate correlations between datasets
+- `data-processor.js` - CSV loading, aggregation, and population normalization helper
 
 ## Testing Data
 
@@ -60,3 +87,4 @@ Place small sample datasets in `data/samples/` for testing before processing ful
 - Document any data transformations you make
 - Keep track of data sources and update links
 - Consider data privacy when working with sensitive datasets
+- Prioritize finding a reliable county population source before adding more optional datasets

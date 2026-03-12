@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Data Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 { color: #003f87; }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        button {
+            background-color: #003f87;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #005bb5;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .console-output {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #003f87;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #003f87;
+            margin-top: 5px;
+        }
+        
+        .progress {
+            width: 100%;
+            height: 25px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: #003f87;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚗 Iowa Vehicle Crash Data Processor</h1>
+    <p>Test parsing and analysis of the 619k+ crash records.</p>
+
+    <div class="test-section">
+        <h2>1. Load Crash Data</h2>
+        <div class="warning">
+            ⚠️ <strong>Note:</strong> This CSV has 619,000+ rows (~309 MB). Loading all data in browser may be slow. 
+            Consider processing only a sample.
+        </div>
+        
+        <input type="file" id="csvFile" accept=".csv">
+        <br>
+        <label>
+            <input type="checkbox" id="sampleOnly" checked>
+            Load sample only (first 10,000 rows for testing)
+        </label>
+        <br><br>
+        <button onclick="loadCrashData()">Load & Parse CSV</button>
+        
+        <div id="loadProgress" class="progress" style="display: none;">
+            <div id="progressBar" class="progress-bar">0%</div>
+        </div>
+        <div id="loadStatus"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Data Summary</h2>
+        <button onclick="showSummary()" id="summaryBtn" disabled>Generate Summary</button>
+        <div id="summaryStats"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Geographic Data</h2>
+        <button onclick="extractGeoData()" id="geoBtn" disabled>Extract Coordinates</button>
+        <button onclick="exportGeoJSON()" id="exportBtn" disabled>Export as GeoJSON</button>
+        <div id="geoStatus"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. County Analysis</h2>
+        <button onclick="analyzeByCounty()" id="countyBtn" disabled>Analyze by County</button>
+        <div id="countyStats"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Alcohol/Drug Analysis</h2>
+        <button onclick="analyzeAlcohol()" id="alcoholBtn" disabled>Analyze Alcohol/Drug Crashes</button>
+        <div id="alcoholStats"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Console Output</h2>
+        <button onclick="clearConsole()">Clear Console</button>
+        <div id="consoleOutput" class="console-output">
+Ready to process crash data. Select the CSV file above.
+        </div>
+    </div>
+
+    <script src="js/data-processor.js"></script>
+    <script src="js/crash-data-processor.js"></script>
+
+    <script>
+        // Override console.log
+        const originalLog = console.log;
+        const consoleOutput = document.getElementById('consoleOutput');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            consoleOutput.textContent += message + '\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+
+        let rawData = null;
+
+        // Load crash data
+        function loadCrashData() {
+            const fileInput = document.getElementById('csvFile');
+            const sampleOnly = document.getElementById('sampleOnly').checked;
+            const progressDiv = document.getElementById('loadProgress');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select the crash CSV file');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            console.log(`\nLoading ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)...`);
+            
+            if (sampleOnly) {
+                console.log('Sample mode: Loading first 10,000 rows only');
+            }
+            
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '10%';
+            progressBar.textContent = 'Reading file...';
+
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    progressBar.style.width = '40%';
+                    progressBar.textContent = 'Parsing CSV...';
+                    
+                    let csvText = e.target.result;
+                    
+                    // If sample mode, only take first N lines
+                    if (sampleOnly) {
+                        const lines = csvText.split('\n');
+                        const sampleSize = Math.min(10001, lines.length); // +1 for header
+                        csvText = lines.slice(0, sampleSize).join('\n');
+                        console.log(`Limited to first ${sampleSize - 1} records`);
+                    }
+                    
+                    progressBar.style.width = '60%';
+                    progressBar.textContent = 'Processing data...';
+                    
+                    const parsedData = dataProcessor.parseCSV(csvText);
+                    rawData = parsedData;
+                    
+                    progressBar.style.width = '80%';
+                    progressBar.textContent = 'Analyzing crashes...';
+                    
+                    crashProcessor.processCrashData(parsedData);
+                    
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = 'Complete!';
+                    
+                    console.log(`✓ Successfully loaded ${parsedData.length} crash records`);
+                    
+                    // Enable other buttons
+                    document.getElementById('summaryBtn').disabled = false;
+                    document.getElementById('geoBtn').disabled = false;
+                    document.getElementById('countyBtn').disabled = false;
+                    document.getElementById('alcoholBtn').disabled = false;
+                    
+                    setTimeout(() => {
+                        progressDiv.style.display = 'none';
+                    }, 2000);
+                    
+                } catch (error) {
+                    console.error('Error processing CSV:', error);
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = 'Error!';
+                    progressBar.style.backgroundColor = '#dc3545';
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        // Show summary statistics
+        function showSummary() {
+            const summary = crashProcessor.generateSummary();
+            
+            const statsHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Crashes</div>
+                        <div class="stat-value">${summary.totalCrashes.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">With Location</div>
+                        <div class="stat-value">${summary.crashesWithLocation.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Fatal Crashes</div>
+                        <div class="stat-value">${summary.fatalCrashes.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Fatalities</div>
+                        <div class="stat-value">${summary.totalFatalities.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Injuries</div>
+                        <div class="stat-value">${summary.totalInjuries.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Alcohol/Drug Related</div>
+                        <div class="stat-value">${summary.alcoholRelatedCrashes.toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('summaryStats').innerHTML = statsHTML;
+        }
+
+        // Extract geographic data
+        function extractGeoData() {
+            console.log('\n--- Extracting Geographic Data ---');
+            const geoData = crashProcessor.extractCrashGeoData();
+            
+            console.log(`Extracted ${geoData.length} crash locations`);
+            console.log('Sample locations:', geoData.slice(0, 3));
+            
+            document.getElementById('geoStatus').innerHTML = 
+                `<p>✓ Extracted ${geoData.length.toLocaleString()} crash locations with coordinates</p>`;
+            
+            document.getElementById('exportBtn').disabled = false;
+        }
+
+        // Export as GeoJSON
+        function exportGeoJSON() {
+            const geoData = crashProcessor.geoData;
+            
+            const geojson = {
+                type: 'FeatureCollection',
+                features: geoData.map(point => ({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [point.lng, point.lat]
+                    },
+                    properties: point.info
+                }))
+            };
+            
+            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'crash-locations.geojson';
+            a.click();
+            
+            console.log('✓ Exported GeoJSON file');
+        }
+
+        // Analyze by county
+        function analyzeByCounty() {
+            console.log('\n--- County Analysis ---');
+            const countyStats = crashProcessor.getCrashesByCounty();
+            
+            // Sort by total crashes
+            const sorted = Object.entries(countyStats)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 10);
+            
+            console.log('Top 10 Counties by Total Crashes:');
+            sorted.forEach(([county, stats]) => {
+                console.log(`${county}: ${stats.total} crashes (${stats.fatalities} fatalities, ${stats.withAlcohol} alcohol-related)`);
+            });
+            
+            let html = '<h3>Top 10 Counties by Crash Count</h3><table style="width:100%; border-collapse: collapse;">';
+            html += '<tr style="background: #003f87; color: white;"><th style="padding: 8px;">County</th><th>Total</th><th>Fatalities</th><th>Injuries</th><th>Alcohol/Drug</th></tr>';
+            
+            sorted.forEach(([county, stats]) => {
+                html += `<tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;"><strong>${county}</strong></td>
+                    <td>${stats.total.toLocaleString()}</td>
+                    <td>${stats.fatalities}</td>
+                    <td>${stats.injuries.toLocaleString()}</td>
+                    <td>${stats.withAlcohol}</td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            document.getElementById('countyStats').innerHTML = html;
+        }
+
+        // Analyze alcohol-related crashes
+        function analyzeAlcohol() {
+            console.log('\n--- Alcohol/Drug Analysis ---');
+            const alcoholCrashes = crashProcessor.getAlcoholRelatedCrashes();
+            
+            console.log(`Total alcohol/drug-related crashes: ${alcoholCrashes.length}`);
+            console.log(`Percentage: ${(alcoholCrashes.length / crashProcessor.crashData.length * 100).toFixed(2)}%`);
+            
+            const alcoholFatalities = alcoholCrashes.reduce((sum, c) => sum + c.fatalities, 0);
+            const alcoholInjuries = alcoholCrashes.reduce((sum, c) => sum + c.injuries, 0);
+            
+            console.log(`Fatalities in alcohol-related crashes: ${alcoholFatalities}`);
+            console.log(`Injuries in alcohol-related crashes: ${alcoholInjuries}`);
+            
+            const html = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Alcohol/Drug Crashes</div>
+                        <div class="stat-value">${alcoholCrashes.length.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Fatalities</div>
+                        <div class="stat-value">${alcoholFatalities}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Injuries</div>
+                        <div class="stat-value">${alcoholInjuries.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Percentage of Total</div>
+                        <div class="stat-value">${(alcoholCrashes.length / crashProcessor.crashData.length * 100).toFixed(1)}%</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('alcoholStats').innerHTML = html;
+        }
+
+        function clearConsole() {
+            consoleOutput.textContent = 'Console cleared.\n';
+        }
+    </script>
+</body>
+</html>

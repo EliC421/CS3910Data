@@ -9,6 +9,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
+const DATASET_CATALOG = [
+    { name: 'crashes', file: 'Vehicle_Crashes_in_Iowa_20260307.csv', required: true },
+    { name: 'countyPopulation', file: 'county-population.csv', required: true },
+    { name: 'countyBoundaries', file: 'IowaCounties.geojson', required: true },
+    { name: 'duiCharges', file: 'dui-charges.csv', required: false },
+    { name: 'liquorSales', file: 'liquor-sales.csv', required: false },
+    { name: 'incarceration', file: 'incarceration.csv', required: false },
+    { name: 'unemploymentRate', file: 'unemployment-rate-by-county.csv', required: false },
+    { name: 'medianIncome', file: 'median-household-income-by-county.csv', required: false }
+];
+
 /**
  * Initialize the application
  */
@@ -30,14 +41,39 @@ async function initializeApp() {
  * Load all data files
  */
 async function loadAllData() {
-    // Placeholder - will be implemented when CSV files are added
     console.log('Loading datasets...');
-    
-    // Example loading calls:
-    // await dataProcessor.loadCSV('liquor-sales.csv', 'liquor');
-    // await dataProcessor.loadCSV('dui-charges.csv', 'dui');
-    // await dataProcessor.loadCSV('sex-offenders.csv', 'offenders');
-    // await dataProcessor.loadCSV('amber-alerts.csv', 'alerts');
+
+    const loaded = [];
+    const missing = [];
+
+    for (const dataset of DATASET_CATALOG) {
+        if (!dataset.file.toLowerCase().endsWith('.csv')) continue;
+
+        const rows = await dataProcessor.loadCSV(dataset.file, dataset.name);
+        if (rows && rows.length > 0) {
+            loaded.push({
+                name: dataset.name,
+                file: dataset.file,
+                rows: rows.length
+            });
+        } else {
+            missing.push(dataset);
+        }
+    }
+
+    if (loaded.length > 0) {
+        loaded.forEach(item => {
+            console.log(`Loaded ${item.name} (${item.rows.toLocaleString()} rows) from data/${item.file}`);
+        });
+    }
+
+    if (missing.length > 0) {
+        console.warn('Missing dataset files:');
+        missing.forEach(item => {
+            const label = item.required ? 'required' : 'optional';
+            console.warn(`- ${item.name}: data/${item.file} (${label})`);
+        });
+    }
 }
 
 /**
