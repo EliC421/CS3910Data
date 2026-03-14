@@ -7,50 +7,66 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <header>
-        <h1>Iowa Data Visualization</h1>
-        <nav>
-            <ul>
-                <li><a href="#map">Map View</a></li>
-                <li><a href="#data">Data</a></li>
-                <li><a href="#about">About</a></li>
-            </ul>
-        </nav>
-    </header>
+    <div class="app">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1>Iowa Data Visualization Project</h1>
+                <p>Visualize Correlations in Iowa Data</p>
+            </div>
+        </header>
 
-    <main>
-        <section id="map-section">
-            <div id="map-controls">
-                <div class="toggle-group">
-                    <h3>Data Layers</h3>
-                    <label><input type="checkbox" id="toggle-liquor" checked> Liquor Sales</label>
-                    <label><input type="checkbox" id="toggle-dui" checked> DUI Charges</label>
-                    <label><input type="checkbox" id="toggle-offenders"> Sex Offenders</label>
-                    <label><input type="checkbox" id="toggle-alerts"> Amber Alerts</label>
+        <main class="dashboard">
+            <!-- Tabs row -->
+            <section class="tabs-panel">
+                <div class="tab-list">
+                    <button class="tab-button active" type="button" data-tab="dui-crashes">DUIs &amp; Crashes</button>
+                    <button class="tab-button" type="button" data-tab="offenders-alerts">Sex Offenders &amp; Amber Alerts</button>
+                    <button class="tab-button" type="button" data-tab="literacy-pbs">Literacy &amp; PBS Services</button>
                 </div>
-            </div>
-            <div id="map"></div>
-        </section>
+            </section>
 
-        <section id="data-section">
-            <h2>Data Visualizations</h2>
-            <div id="charts-container">
-                <!-- Charts will be dynamically inserted here -->
-            </div>
-        </section>
-    </main>
+            <!-- Main content row -->
+            <section class="main-layout">
+                <section class="map-section">
+                    <div class="card-header">
+                        <h2 id="map-title">Liquor sales, DUI charges, and crashes</h2>
+                    </div>
 
-    <footer>
-        <p>&copy; 2026 Iowa Data Visualization Project</p>
-        <p>Team: Vanessa Banks, Eli Chow, Samsam Mohamed</p>
-    </footer>
+                    <div class="map-shell">
+                        <div id="map"></div>
+                    </div>
+                </section>
 
-    <!-- Google Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap" async defer></script>
-    
-    <!-- Application Scripts -->
+                <aside class="layers-panel">
+                    <div class="card-header">
+                        <h2>Layers</h2>
+                    </div>
+                    <div id="layer-controls" class="layer-controls"></div>
+                </aside>
+            </section>
+
+            <section class="graphs-card">
+                <div class="card-header">
+                    <h2>Graphs Potentially</h2>
+                </div>
+                <div id="charts-container" class="charts-placeholder">
+                    Graphs will appear here if we still want it
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="config.js"></script>
     <script src="js/map.js"></script>
     <script src="js/data-processor.js"></script>
     <script src="js/main.js"></script>
+
+    <script>
+        const googleMapsScript = document.createElement('script');
+        googleMapsScript.src = `https://maps.googleapis.com/maps/api/js?key=${CONFIG.googleMapsApiKey}&callback=initMap`;
+        googleMapsScript.async = true;
+        googleMapsScript.defer = true;
+        document.head.appendChild(googleMapsScript);
+    </script>
 </body>
 </html>

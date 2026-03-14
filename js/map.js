@@ -17,14 +17,31 @@ function initMap() {
         zoom: 7,
         center: iowaCenter,
         mapTypeId: 'roadmap',
-        styles: getMapStyles()
+        styles: getMapStyles(),
     });
-
-    // Initialize event listeners for toggles
-    initMapControls();
     
     // Load initial data
     loadMapData();
+    loadCountyBoundaries();
+}
+
+/** I tried to get Iowa to fill up more of the map  */
+async function loadCountyBoundaries() {
+    try {
+        const response = await fetch('data/IowaCounties.geojson');
+        const geojson = await response.json();
+
+        map.data.addGeoJson(geojson);
+
+        map.data.setStyle({
+            fillColor: '#f8f8f8',
+            fillOpacity: 0.25,
+            strokeColor: '#222',
+            strokeWeight: 2.6
+        });
+    } catch (error) {
+        console.error('Error loading Iowa county boundaries:', error);
+    }
 }
 
 /**
@@ -38,27 +55,6 @@ function getMapStyles() {
             stylers: [{ visibility: 'off' }]
         }
     ];
-}
-
-/**
- * Initialize map control event listeners
- */
-function initMapControls() {
-    document.getElementById('toggle-liquor').addEventListener('change', (e) => {
-        toggleLayer('liquor', e.target.checked);
-    });
-    
-    document.getElementById('toggle-dui').addEventListener('change', (e) => {
-        toggleLayer('dui', e.target.checked);
-    });
-    
-    document.getElementById('toggle-offenders').addEventListener('change', (e) => {
-        toggleLayer('offenders', e.target.checked);
-    });
-    
-    document.getElementById('toggle-alerts').addEventListener('change', (e) => {
-        toggleLayer('alerts', e.target.checked);
-    });
 }
 
 /**
@@ -110,6 +106,7 @@ function toggleLayer(layerName, isVisible) {
         });
     }
 }
+
 
 /**
  * Create marker for a data point

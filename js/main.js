@@ -4,33 +4,55 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Iowa Data Visualization App Loaded');
-    
-    // Initialize the application
     initializeApp();
 });
 
-const DATASET_CATALOG = [
-    { name: 'crashes', file: 'Vehicle_Crashes_in_Iowa_20260307.csv', required: true },
-    { name: 'countyPopulation', file: 'county-population.csv', required: true },
-    { name: 'countyBoundaries', file: 'IowaCounties.geojson', required: true },
-    { name: 'duiCharges', file: 'dui-charges.csv', required: false },
-    { name: 'liquorSales', file: 'liquor-sales.csv', required: false },
-    { name: 'incarceration', file: 'incarceration.csv', required: false },
-    { name: 'unemploymentRate', file: 'unemployment-rate-by-county.csv', required: false },
-    { name: 'medianIncome', file: 'median-household-income-by-county.csv', required: false }
-];
+/**
+ * Tab configuration
+ */
+const tabConfig = {
+    "dui-crashes": {
+        mapTitle: "Liquor sales, DUI charges, and crashes",
+        layers: [
+            { id: "liquorSales", label: "Liquor Sales", checked: true },
+            { id: "duiCharges", label: "DUI Charges", checked: true },
+            { id: "crashes", label: "Crashes", checked: false }
+        ]
+    },
+    "offenders-alerts": {
+        mapTitle: "Sex offenders, Amber Alerts, and incarceration",
+        layers: [
+            { id: "sexOffenders", label: "Sex Offenders", checked: true },
+            { id: "amberAlerts", label: "Amber Alerts", checked: true },
+            { id: "incarceration", label: "Incarceration Data", checked: false }
+        ]
+    },
+    "literacy-pbs": {
+        mapTitle: "Reading, math, and PBS services",
+        layers: [
+            { id: "readingProficiency", label: "Reading Proficiency", checked: true },
+            { id: "mathProficiency", label: "Math Proficiency", checked: false },
+            { id: "pbsServices", label: "PBS Services", checked: true }
+        ]
+    }
+};
+
+/**
+ * Main application state
+ */
+const appState = {
+    activeTab: "dui-crashes",
+    visibleLayers: {}
+};
 
 /**
  * Initialize the application
  */
 async function initializeApp() {
     try {
-        // Load all datasets
         await loadAllData();
-        
-        // Setup event listeners
         setupEventListeners();
-        
+        renderCurrentTabUI();
         console.log('Application initialized successfully');
     } catch (error) {
         console.error('Error initializing application:', error);
@@ -42,61 +64,95 @@ async function initializeApp() {
  */
 async function loadAllData() {
     console.log('Loading datasets...');
-
-    const loaded = [];
-    const missing = [];
-
-    for (const dataset of DATASET_CATALOG) {
-        if (!dataset.file.toLowerCase().endsWith('.csv')) continue;
-
-        const rows = await dataProcessor.loadCSV(dataset.file, dataset.name);
-        if (rows && rows.length > 0) {
-            loaded.push({
-                name: dataset.name,
-                file: dataset.file,
-                rows: rows.length
-            });
-        } else {
-            missing.push(dataset);
-        }
-    }
-
-    if (loaded.length > 0) {
-        loaded.forEach(item => {
-            console.log(`Loaded ${item.name} (${item.rows.toLocaleString()} rows) from data/${item.file}`);
-        });
-    }
-
-    if (missing.length > 0) {
-        console.warn('Missing dataset files:');
-        missing.forEach(item => {
-            const label = item.required ? 'required' : 'optional';
-            console.warn(`- ${item.name}: data/${item.file} (${label})`);
-        });
-    }
 }
 
 /**
- * Setup general event listeners
+ * Setup tab listeners
  */
 function setupEventListeners() {
-    // Navigation
-    document.querySelectorAll('nav a').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const target = e.target.getAttribute('href');
-            scrollToSection(target);
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const selectedTab = button.dataset.tab;
+            setActiveTab(selectedTab);
         });
     });
 }
 
 /**
- * Smooth scroll to section
+ * Set active tab
  */
-function scrollToSection(selector) {
-    const element = document.querySelector(selector + '-section');
-    if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
+function setActiveTab(tabKey) {
+    if (!tabConfig[tabKey]) return;
+
+    appState.activeTab = tabKey;
+
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.toggle('active', button.dataset.tab === tabKey);
+    });
+
+    renderCurrentTabUI();
+    updateMapForCurrentState();
+}
+
+/**
+ * Render current tab UI
+ */
+function renderCurrentTabUI() {
+    const currentTab = tabConfig[appState.activeTab];
+    const mapTitle = document.getElementById('map-title');
+
+    if (mapTitle) {
+        mapTitle.textContent = currentTab.mapTitle;
+    }
+
+    renderLayerControls(currentTab.layers);
+}
+
+/**
+ * Render layer controls dynamically
+ */
+function renderLayerControls(layers) {
+    const controlsContainer = document.getElementById('layer-controls');
+    if (!controlsContainer) return;
+
+    controlsContainer.innerHTML = '';
+    appState.visibleLayers = {};
+
+    layers.forEach(layer => {
+        appState.visibleLayers[layer.id] = layer.checked;
+
+        const label = document.createElement('label');
+        label.className = 'layer-toggle';
+
+        const text = document.createElement('span');
+        text.textContent = layer.label;
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = layer.checked;
+        input.dataset.layerId = layer.id;
+
+        input.addEventListener('change', (event) => {
+            const layerId = event.target.dataset.layerId;
+            appState.visibleLayers[layerId] = event.target.checked;
+            updateMapForCurrentState();
+        });
+
+        label.appendChild(text);
+        label.appendChild(input);
+        controlsContainer.appendChild(label);
+    });
+}
+
+/**
+ * Update map state
+ */
+function updateMapForCurrentState() {
+    console.log('Active tab:', appState.activeTab);
+    console.log('Visible layers:', appState.visibleLayers);
+
+    if (typeof updateMapLayers === 'function') {
+        updateMapLayers(appState.activeTab, appState.visibleLayers);
     }
 }
 
@@ -105,13 +161,11 @@ function scrollToSection(selector) {
  */
 function displayError(message) {
     console.error(message);
-    // TODO: Add user-friendly error display
 }
 
 /**
  * Display loading indicator
  */
 function showLoading(isLoading) {
-    // TODO: Implement loading indicator
     console.log(isLoading ? 'Loading...' : 'Loading complete');
 }
