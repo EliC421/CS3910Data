@@ -5,7 +5,7 @@
 
 const CONFIG = {
     // Google Maps API Key
-    googleMapsApiKey: 'YOUR_GOOGLE_MAPS_API_KEY_HERE',
+    googleMapsApiKey: 'AIzaSyC59MCMqdD5XZZw0NYt63Osr4AYld6wXD8',
     
     // Map configuration
     map: {
