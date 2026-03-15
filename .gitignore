@@ -3,11 +3,11 @@ data/*.csv
 data/processed/*
 !data/README.md
 
-# API Keys
-**/config.js
-**/*-config.js
-.env
-.env.local
+# # API Keys
+# **/config.js
+# **/*-config.js
+# .env
+# .env.local
 
 # IDE
 .vscode/
