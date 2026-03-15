@@ -12,24 +12,24 @@ body {
 }
 /* Top header bar */ 
 .topbar {
-    background: #25688c;
+    background: #1c5e82;
     color: #fff;
-    padding: 22px 30px;
+    padding: 8px 12px;
 }
 /* Main in header */ 
 .topbar-left h1 {
-    font-size: 1.9rem;
-    margin-bottom: 4px;
+    font-size: 1.15rem;
+    margin-bottom: 1.5px;
     font-weight: 700;
 }
 /* Subtitle header */ 
 .topbar-left p {
-    font-size: 0.98rem;
+    font-size: 0.87rem;
     color: rgba(255, 255, 255, 0.85);
 }
 /* Dashboard */ 
 .dashboard {
-    max-width: 1240px;
+    max-width: 1450px;
     margin: 0 auto;
     padding: 24px;
 }
@@ -85,9 +85,10 @@ body {
 /* Main map + layers layout */
 .main-layout {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 28px;
+    grid-template-columns: minmax(0, 1fr) 235px;
+    gap: 18px;
     align-items: start;
+    margin-bottom: 22px;
 }
 
 .map-section,
@@ -100,7 +101,7 @@ body {
 }
 
 .layer-panel {
-    margin-top: 54px;
+    align-self: start;
 }
 
 .card-header {
@@ -158,7 +159,8 @@ body {
 }
 
 .map-shell {
-    height: 700px;
+    position: relative; /* Positions the county names on map */
+    height: 720px;
     background: #cfd7dc;
     border-radius: 16px;
     overflow: hidden;
@@ -167,6 +169,37 @@ body {
 #map {
     width: 100%;
     height: 100%;
+}
+
+/* County card holder */ 
+
+.county-card {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 240px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #d7dde2;
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 5;
+}
+
+.county-card h3 {
+    font-size: 1rem;
+    margin-bottom: 6px;
+    color: #263746;
+}
+
+.county-card p {
+    font-size: 0.92rem;
+    color: #4b5563;
+    line-height: 1.4;
+}
+
+.hidden {
+    display: none;
 }
 /* Placeholder box for graphs */ 
 .charts-placeholder {
