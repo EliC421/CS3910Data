@@ -1,130 +1,64 @@
-/**
- * Map initialization and management
- */
-
-let map;
-let heatmaps = {};
-let markers = {};
-
-/**
- * Initialize Google Map
- */
 function initMap() {
-    // Center on Iowa
-    const iowaCenter = { lat: 41.8780, lng: -93.0977 };
-    
-    map = new google.maps.Map(document.getElementById('map'), {
-        zoom: 7,
-        center: iowaCenter,
-        mapTypeId: 'roadmap',
-        styles: getMapStyles(),
-    });
-    
-    // Load initial data
-    loadMapData();
-    loadCountyBoundaries();
-}
+  console.log("initMap started");
 
-/** I tried to get Iowa to fill up more of the map  */
-async function loadCountyBoundaries() {
-    try {
-        const response = await fetch('data/IowaCounties.geojson');
-        const geojson = await response.json();
+  const map = new google.maps.Map(document.getElementById("map"), {
+    mapTypeId: "terrain",
+  });
 
-        map.data.addGeoJson(geojson);
+  map.data.setStyle({
+    fillColor: "#4285F4",
+    strokeColor: "#000000",
+    strokeWeight: 0.75,
+    fillOpacity: 0.2,
+  });
 
-        map.data.setStyle({
-            fillColor: '#f8f8f8',
-            fillOpacity: 0.25,
-            strokeColor: '#222',
-            strokeWeight: 2.6
-        });
-    } catch (error) {
-        console.error('Error loading Iowa county boundaries:', error);
+  map.data.loadGeoJson("data/IowaCounties.geojson", null, function (features) {
+    console.log("GeoJSON loaded");
+    console.log("Feature count:", features.length);
+
+    if (!features || !features.length) {
+      console.log("No features found in GeoJSON");
+      return;
     }
-}
 
-/**
- * Get custom map styles
- */
-function getMapStyles() {
-    return [
-        {
-            featureType: 'poi',
-            elementType: 'labels',
-            stylers: [{ visibility: 'off' }]
-        }
-    ];
-}
+    const bounds = new google.maps.LatLngBounds();
 
-/**
- * Load map data from processed sources
- */
-async function loadMapData() {
-    try {
-        // Placeholder - will be implemented with actual data
-        console.log('Loading map data...');
-        
-        // Example: Create sample heatmap layer
-        // This will be replaced with actual data processing
-        createHeatmapLayer('liquor', []);
-        createHeatmapLayer('dui', []);
-    } catch (error) {
-        console.error('Error loading map data:', error);
+    features.forEach((feature) => {
+      processPoints(feature.getGeometry(), bounds);
+    });
+
+    map.fitBounds(bounds);
+  });
+
+  map.data.addListener("click", (event) => {
+    const countyName =
+      event.feature.getProperty("NAME") ||
+      event.feature.getProperty("name") ||
+      event.feature.getProperty("County") ||
+      "Unknown county";
+
+    const card = document.getElementById("county-card");
+    const title = document.getElementById("county-card-title");
+    const body = document.getElementById("county-card-body");
+
+    if (card && title && body) {
+      title.textContent = countyName;
+      body.textContent = "County details will appear here.";
+      card.classList.remove("hidden");
     }
+  });
 }
 
-/**
- * Create a heatmap layer
- */
-function createHeatmapLayer(layerName, data) {
-    const heatmapData = data.map(point => {
-        return {
-            location: new google.maps.LatLng(point.lat, point.lng),
-            weight: point.weight || 1
-        };
+function processPoints(geometry, bounds) {
+  if (geometry instanceof google.maps.LatLng) {
+    bounds.extend(geometry);
+  } else if (geometry instanceof google.maps.Data.Point) {
+    bounds.extend(geometry.get());
+  } else {
+    geometry.getArray().forEach((g) => {
+      processPoints(g, bounds);
     });
-    
-    heatmaps[layerName] = new google.maps.visualization.HeatmapLayer({
-        data: heatmapData,
-        map: map,
-        radius: 20,
-        opacity: 0.6
-    });
+  }
 }
 
-/**
- * Toggle visibility of a data layer
- */
-function toggleLayer(layerName, isVisible) {
-    if (heatmaps[layerName]) {
-        heatmaps[layerName].setMap(isVisible ? map : null);
-    }
-    if (markers[layerName]) {
-        markers[layerName].forEach(marker => {
-            marker.setMap(isVisible ? map : null);
-        });
-    }
-}
-
-
-/**
- * Create marker for a data point
- */
-function createMarker(position, title, info) {
-    const marker = new google.maps.Marker({
-        position: position,
-        map: map,
-        title: title
-    });
-    
-    const infoWindow = new google.maps.InfoWindow({
-        content: info
-    });
-    
-    marker.addListener('click', () => {
-        infoWindow.open(map, marker);
-    });
-    
-    return marker;
-}
+window.initMap = initMap;
