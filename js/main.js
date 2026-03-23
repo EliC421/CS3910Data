@@ -24,6 +24,16 @@ const LAYER_TO_METRIC_FIELD = {
     pbsServices: 'unemployment_rate'
 };
 
+const LAYER_LABELS = {
+    liquorSales: 'Liquor Sales (per 100k)',
+    duiCharges: 'DUI Proxy (OWI probation per 100k)',
+    crashes: 'Impaired Crashes (per 100k)',
+    incarceration: 'OWI Reincarceration (count)',
+    readingProficiency: 'Median Household Income',
+    mathProficiency: 'Median Household Income',
+    pbsServices: 'Unemployment Rate'
+};
+
 /**
  * Tab configuration
  */
@@ -226,6 +236,57 @@ function updateMapForCurrentState() {
             crashPoints: appState.crashPoints
         });
     }
+
+    renderBasicGraphs(prioritizedLayer, metricLayer);
+}
+
+function renderBasicGraphs(activeLayerId, metricLayer) {
+    const container = document.getElementById('charts-container');
+    if (!container) return;
+
+    if (!activeLayerId || !metricLayer || !metricLayer.valuesByCounty) {
+        container.innerHTML = '<p>Select a layer to view chart summaries.</p>';
+        return;
+    }
+
+    const entries = Object.entries(metricLayer.valuesByCounty)
+        .filter(([, value]) => Number.isFinite(value))
+        .sort((a, b) => b[1] - a[1]);
+
+    if (entries.length === 0) {
+        container.innerHTML = '<p>No graphable values for this layer.</p>';
+        return;
+    }
+
+    const top10 = entries.slice(0, 10);
+    const max = top10[0][1] || 1;
+    const avg = entries.reduce((sum, [, value]) => sum + value, 0) / entries.length;
+
+    const bars = top10.map(([county, value]) => {
+        const width = Math.max(2, (value / max) * 100);
+        return `
+            <div class="bar-row">
+                <span class="bar-label">${county}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+                <span class="bar-value">${value.toFixed(2)}</span>
+            </div>
+        `;
+    }).join('');
+
+    const title = LAYER_LABELS[activeLayerId] || activeLayerId;
+
+    container.innerHTML = `
+        <div class="graph-header">
+            <h3>${title}</h3>
+            <p>Year ${metricLayer.year || 'N/A'} · Counties with values: ${entries.length}</p>
+        </div>
+        <div class="summary-grid">
+            <div class="summary-card"><strong>Average</strong><span>${avg.toFixed(2)}</span></div>
+            <div class="summary-card"><strong>Max</strong><span>${(metricLayer.max ?? 0).toFixed(2)}</span></div>
+            <div class="summary-card"><strong>Min</strong><span>${(metricLayer.min ?? 0).toFixed(2)}</span></div>
+        </div>
+        <div class="bars-wrap">${bars}</div>
+    `;
 }
 
 /**

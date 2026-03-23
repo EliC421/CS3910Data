@@ -268,30 +268,51 @@ class DataProcessor {
             };
         }
 
-        const years = dataset
-            .map((row) => this.toNumber(row[yearField]))
-            .filter((year) => Number.isFinite(year));
-
-        const activeYear = preferredYear && years.includes(preferredYear)
-            ? preferredYear
-            : Math.max(...years);
-
-        const valuesByCounty = {};
-        let min = Infinity;
-        let max = -Infinity;
+        const statsByYear = new Map();
 
         dataset.forEach((row) => {
             const year = this.toNumber(row[yearField]);
-            if (year !== activeYear) return;
+            if (!Number.isFinite(year)) return;
 
+            if (!statsByYear.has(year)) {
+                statsByYear.set(year, {
+                    valuesByCounty: {},
+                    min: Infinity,
+                    max: -Infinity,
+                    nonNullCount: 0,
+                    nonZeroCount: 0
+                });
+            }
+
+            const bucket = statsByYear.get(year);
             const countyKey = this.normalizeCountyKey(row[countyField]);
             const value = this.toNumber(row[valueField]);
             if (!countyKey || value === null) return;
 
-            valuesByCounty[countyKey] = value;
-            if (value < min) min = value;
-            if (value > max) max = value;
+            bucket.valuesByCounty[countyKey] = value;
+            bucket.nonNullCount += 1;
+            if (value > 0) bucket.nonZeroCount += 1;
+            if (value < bucket.min) bucket.min = value;
+            if (value > bucket.max) bucket.max = value;
         });
+
+        const years = Array.from(statsByYear.keys()).sort((a, b) => b - a);
+        let activeYear = null;
+
+        if (preferredYear && statsByYear.has(preferredYear)) {
+            activeYear = preferredYear;
+        } else {
+            // Prefer the latest year with enough non-zero counties to avoid partial-year all-zero maps.
+            activeYear = years.find((year) => {
+                const stats = statsByYear.get(year);
+                return stats.nonZeroCount >= 8;
+            }) ?? years[0] ?? null;
+        }
+
+        const activeStats = activeYear !== null ? statsByYear.get(activeYear) : null;
+        const valuesByCounty = activeStats ? activeStats.valuesByCounty : {};
+        const min = activeStats ? activeStats.min : null;
+        const max = activeStats ? activeStats.max : null;
 
         return {
             year: Number.isFinite(activeYear) ? activeYear : null,
