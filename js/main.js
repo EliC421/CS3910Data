@@ -7,6 +7,23 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
+const DATA_LOADING_APPROACH = 'frontend-static-csv';
+
+const DATASET_CATALOG = [
+    { name: 'crashes', file: 'Vehicle_Crashes_in_Iowa_20260312.csv', required: true },
+    { name: 'countyNormalized', file: 'processed/county_year_normalized.csv', required: true }
+];
+
+const LAYER_TO_METRIC_FIELD = {
+    liquorSales: 'liquor_dollars_per_100k',
+    duiCharges: 'owi_probation_per_100k',
+    crashes: 'impaired_crashes_per_100k',
+    incarceration: 'owi_reincarcerated',
+    readingProficiency: 'median_household_income',
+    mathProficiency: 'median_household_income',
+    pbsServices: 'unemployment_rate'
+};
+
 /**
  * Tab configuration
  */
@@ -42,7 +59,9 @@ const tabConfig = {
  */
 const appState = {
     activeTab: "dui-crashes",
-    visibleLayers: {}
+    visibleLayers: {},
+    mapLayersByMetric: {},
+    crashPoints: []
 };
 
 /**
@@ -50,12 +69,19 @@ const appState = {
  */
 async function initializeApp() {
     try {
+        const loadingApproachNode = document.getElementById('data-loading-approach');
+        if (loadingApproachNode) {
+            loadingApproachNode.textContent = DATA_LOADING_APPROACH;
+        }
+
         await loadAllData();
+        buildMapReadyData();
         setupEventListeners();
         renderCurrentTabUI();
+        updateMapForCurrentState();
         console.log('Application initialized successfully');
     } catch (error) {
-        console.error('Error initializing application:', error);
+        displayError(`Initialization failed: ${error.message}`);
     }
 }
 
@@ -63,7 +89,45 @@ async function initializeApp() {
  * Load all data files
  */
 async function loadAllData() {
-    console.log('Loading datasets...');
+    console.log('Loading datasets using strategy:', DATA_LOADING_APPROACH);
+    showLoading(true);
+
+    const failures = [];
+
+    try {
+        for (const dataset of DATASET_CATALOG) {
+            const rows = await dataProcessor.loadCSV(dataset.file, dataset.name);
+            if (!rows || rows.length === 0) {
+                failures.push(dataset);
+                continue;
+            }
+
+            console.log(`Loaded ${dataset.name}: ${rows.length.toLocaleString()} rows`);
+        }
+
+        const requiredFailures = failures.filter((entry) => entry.required);
+        if (requiredFailures.length > 0) {
+            const missing = requiredFailures.map((entry) => entry.file).join(', ');
+            throw new Error(`Required datasets missing or empty: ${missing}`);
+        }
+    } finally {
+        showLoading(false);
+    }
+}
+
+function buildMapReadyData() {
+    appState.crashPoints = dataProcessor.toMapReadyCrashPoints('crashes', { limit: 8000 });
+
+    Object.entries(LAYER_TO_METRIC_FIELD).forEach(([layerId, valueField]) => {
+        appState.mapLayersByMetric[layerId] = dataProcessor.toMapReadyCountyMetrics('countyNormalized', {
+            valueField
+        });
+    });
+
+    window.__mapReadyData = {
+        crashPoints: appState.crashPoints,
+        layers: appState.mapLayersByMetric
+    };
 }
 
 /**
@@ -148,11 +212,19 @@ function renderLayerControls(layers) {
  * Update map state
  */
 function updateMapForCurrentState() {
-    console.log('Active tab:', appState.activeTab);
-    console.log('Visible layers:', appState.visibleLayers);
+    const activeLayerIds = Object.entries(appState.visibleLayers)
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([layerId]) => layerId);
+
+    const prioritizedLayer = activeLayerIds.find((layerId) => layerId in LAYER_TO_METRIC_FIELD) || null;
+    const metricLayer = prioritizedLayer ? appState.mapLayersByMetric[prioritizedLayer] : null;
 
     if (typeof updateMapLayers === 'function') {
-        updateMapLayers(appState.activeTab, appState.visibleLayers);
+        updateMapLayers(appState.activeTab, appState.visibleLayers, {
+            selectedLayerId: prioritizedLayer,
+            metricLayer,
+            crashPoints: appState.crashPoints
+        });
     }
 }
 
@@ -161,11 +233,20 @@ function updateMapForCurrentState() {
  */
 function displayError(message) {
     console.error(message);
+
+    const banner = document.getElementById('error-banner');
+    if (!banner) return;
+
+    banner.textContent = message;
+    banner.classList.remove('hidden');
 }
 
 /**
  * Display loading indicator
  */
 function showLoading(isLoading) {
-    console.log(isLoading ? 'Loading...' : 'Loading complete');
+    const indicator = document.getElementById('loading-indicator');
+    if (!indicator) return;
+
+    indicator.classList.toggle('hidden', !isLoading);
 }

@@ -4,6 +4,21 @@ This branch contains tools and scripts for processing Iowa government CSV data.
 
 ## Data Processing Workflow
 
+## Data Loading Approach Decision (Issue #7)
+
+- **Chosen approach:** frontend static loading with preprocessed CSV outputs.
+- **Why:** this repo currently ships as a static site and already includes a preprocessing script (`scripts/prepare-datasets.js`) that generates county-year normalized outputs.
+- **Tradeoff:** larger downloads for the browser, but simpler deployment and no backend service needed for the prototype phase.
+
+## Map-Ready Parsing and Normalization (Issues #6 and #8)
+
+- Raw crash records are converted into map-ready point records from `Location` WKT values (`POINT (lng lat)`).
+- County-level choropleth metrics are read from `data/processed/county_year_normalized.csv`.
+- County keys are normalized consistently (trim, remove `County`, remove `, Iowa`, case-insensitive).
+- Population normalization rule used in outputs:
+   - `ratePer100k = (countyTotal / countyPopulation) * 100000`
+- Frontend selects the latest available year by default when rendering county metric layers.
+
 1. **Download Data**
    - Download required CSV files and county geometry
    - Place files in the `data/` directory using project-standard names

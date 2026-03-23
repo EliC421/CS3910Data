@@ -12,8 +12,12 @@
             <div class="topbar-left">
                 <h1>Iowa Data Visualization Project</h1>
                 <p>Visualize Correlations in Iowa Data</p>
+                <p class="data-strategy">Loading strategy: <code id="data-loading-approach">pending</code></p>
             </div>
         </header>
+
+        <div id="error-banner" class="error-banner hidden" role="alert"></div>
+        <div id="loading-indicator" class="loading-indicator hidden">Loading datasets...</div>
 
         <main class="dashboard">
             <!-- Tabs row -->

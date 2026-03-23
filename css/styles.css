@@ -27,6 +27,39 @@ body {
     font-size: 0.87rem;
     color: rgba(255, 255, 255, 0.85);
 }
+
+.topbar-left .data-strategy {
+    margin-top: 3px;
+    font-size: 0.78rem;
+}
+
+.topbar-left .data-strategy code {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 2px 6px;
+    color: #fff;
+}
+
+.error-banner {
+    background: #fee2e2;
+    border: 1px solid #ef4444;
+    color: #7f1d1d;
+    padding: 10px 16px;
+    margin: 10px auto 0;
+    max-width: 1450px;
+    border-radius: 10px;
+}
+
+.loading-indicator {
+    max-width: 1450px;
+    margin: 10px auto 0;
+    background: #dbeafe;
+    color: #1e3a8a;
+    border: 1px solid #60a5fa;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-weight: 600;
+}
 /* Dashboard */ 
 .dashboard {
     max-width: 1450px;
