@@ -1,6 +1,6 @@
-# Large data files
-data/*.csv
-data/processed/*
+# Dataset files are tracked in git; large CSVs are handled by Git LFS.
+!data/*.csv
+!data/processed/*.csv
 !data/README.md
 
 # API Keys
