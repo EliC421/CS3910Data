@@ -9,6 +9,21 @@ class DataProcessor {
         this.processedData = {};
     }
 
+    normalizeCountyKey(value) {
+        return String(value || '')
+            .trim()
+            .toUpperCase()
+            .replace(/,\s*IOWA\s*$/i, '')
+            .replace(/\s+COUNTY\s*$/i, '')
+            .replace(/\s+/g, ' ');
+    }
+
+    toNumber(value) {
+        if (value === null || value === undefined || value === '') return null;
+        const numeric = Number(String(value).replace(/,/g, '').trim());
+        return Number.isFinite(numeric) ? numeric : null;
+    }
+
     /**
      * Load and parse CSV file
      */
@@ -113,7 +128,6 @@ class DataProcessor {
      * Calculate correlation between two datasets
      */
     calculateCorrelation(dataset1Name, dataset2Name, field1, field2) {
-        // Placeholder for correlation analysis
         const data1 = this.datasets[dataset1Name];
         const data2 = this.datasets[dataset2Name];
 
@@ -122,11 +136,189 @@ class DataProcessor {
             return null;
         }
 
-        // TODO: Implement correlation calculation
-        console.log('Calculating correlation between', dataset1Name, 'and', dataset2Name);
+        const countyFieldCandidates = ['county', 'County', 'COUNTY', 'county_name', 'County Name'];
+        const findCountyField = (row) => countyFieldCandidates.find((key) => key in row);
+
+        const countyField1 = findCountyField(data1[0] || {});
+        const countyField2 = findCountyField(data2[0] || {});
+
+        if (!countyField1 || !countyField2) {
+            console.error('Unable to locate county fields for correlation');
+            return null;
+        }
+
+        const indexByCounty = (rows, countyField, valueField) => {
+            const values = {};
+            rows.forEach((row) => {
+                const countyKey = this.normalizeCountyKey(row[countyField]);
+                const numeric = this.toNumber(row[valueField]);
+                if (!countyKey || numeric === null) return;
+                values[countyKey] = numeric;
+            });
+            return values;
+        };
+
+        const values1 = indexByCounty(data1, countyField1, field1);
+        const values2 = indexByCounty(data2, countyField2, field2);
+
+        const sharedCounties = Object.keys(values1).filter((county) => county in values2);
+        if (sharedCounties.length < 3) {
+            console.warn('Not enough shared county values to compute correlation');
+            return null;
+        }
+
+        const x = sharedCounties.map((county) => values1[county]);
+        const y = sharedCounties.map((county) => values2[county]);
+
+        const mean = (arr) => arr.reduce((sum, v) => sum + v, 0) / arr.length;
+        const meanX = mean(x);
+        const meanY = mean(y);
+
+        let numerator = 0;
+        let denomX = 0;
+        let denomY = 0;
+
+        for (let i = 0; i < x.length; i++) {
+            const dx = x[i] - meanX;
+            const dy = y[i] - meanY;
+            numerator += dx * dy;
+            denomX += dx * dx;
+            denomY += dy * dy;
+        }
+
+        const denominator = Math.sqrt(denomX * denomY);
+        const coefficient = denominator === 0 ? 0 : numerator / denominator;
+
+        const abs = Math.abs(coefficient);
+        let strength = 'weak';
+        if (abs >= 0.7) strength = 'strong';
+        else if (abs >= 0.4) strength = 'moderate';
+
         return {
-            coefficient: 0,
-            significance: 0
+            coefficient,
+            sampleSize: sharedCounties.length,
+            strength,
+            pairs: sharedCounties.map((county) => ({
+                county,
+                x: values1[county],
+                y: values2[county]
+            }))
+        };
+    }
+
+    parsePointWkt(value) {
+        const match = String(value || '').match(/POINT\s*\(([-\d.]+)\s+([-\d.]+)\)/i);
+        if (!match) return null;
+
+        const lng = Number(match[1]);
+        const lat = Number(match[2]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        return { lat, lng };
+    }
+
+    toMapReadyCrashPoints(datasetName, options = {}) {
+        const {
+            countyField = 'County Name',
+            locationField = 'Location',
+            severityField = 'Crash Severity',
+            fatalitiesField = 'Number of Fatalities',
+            injuriesField = 'Number of Injuries',
+            limit = 5000
+        } = options;
+
+        const dataset = this.datasets[datasetName];
+        if (!dataset) return [];
+
+        const points = [];
+        for (const row of dataset) {
+            if (points.length >= limit) break;
+
+            const point = this.parsePointWkt(row[locationField]);
+            if (!point) continue;
+
+            points.push({
+                county: row[countyField] || 'Unknown',
+                lat: point.lat,
+                lng: point.lng,
+                severity: row[severityField] || 'Unknown',
+                fatalities: this.toNumber(row[fatalitiesField]) || 0,
+                injuries: this.toNumber(row[injuriesField]) || 0
+            });
+        }
+
+        return points;
+    }
+
+    toMapReadyCountyMetrics(datasetName, options = {}) {
+        const {
+            yearField = 'year',
+            countyField = 'county',
+            valueField,
+            preferredYear = null
+        } = options;
+
+        const dataset = this.datasets[datasetName];
+        if (!dataset || !valueField) {
+            return {
+                year: null,
+                min: null,
+                max: null,
+                valuesByCounty: {}
+            };
+        }
+
+        const statsByYear = new Map();
+
+        dataset.forEach((row) => {
+            const year = this.toNumber(row[yearField]);
+            if (!Number.isFinite(year)) return;
+
+            if (!statsByYear.has(year)) {
+                statsByYear.set(year, {
+                    valuesByCounty: {},
+                    min: Infinity,
+                    max: -Infinity,
+                    nonNullCount: 0,
+                    nonZeroCount: 0
+                });
+            }
+
+            const bucket = statsByYear.get(year);
+            const countyKey = this.normalizeCountyKey(row[countyField]);
+            const value = this.toNumber(row[valueField]);
+            if (!countyKey || value === null) return;
+
+            bucket.valuesByCounty[countyKey] = value;
+            bucket.nonNullCount += 1;
+            if (value > 0) bucket.nonZeroCount += 1;
+            if (value < bucket.min) bucket.min = value;
+            if (value > bucket.max) bucket.max = value;
+        });
+
+        const years = Array.from(statsByYear.keys()).sort((a, b) => b - a);
+        let activeYear = null;
+
+        if (preferredYear && statsByYear.has(preferredYear)) {
+            activeYear = preferredYear;
+        } else {
+            // Prefer the latest year with enough non-zero counties to avoid partial-year all-zero maps.
+            activeYear = years.find((year) => {
+                const stats = statsByYear.get(year);
+                return stats.nonZeroCount >= 8;
+            }) ?? years[0] ?? null;
+        }
+
+        const activeStats = activeYear !== null ? statsByYear.get(activeYear) : null;
+        const valuesByCounty = activeStats ? activeStats.valuesByCounty : {};
+        const min = activeStats ? activeStats.min : null;
+        const max = activeStats ? activeStats.max : null;
+
+        return {
+            year: Number.isFinite(activeYear) ? activeYear : null,
+            min: Number.isFinite(min) ? min : null,
+            max: Number.isFinite(max) ? max : null,
+            valuesByCounty
         };
     }
 
