@@ -154,7 +154,7 @@
 <body>
 <div class="page">
     <h1>County-Year Metrics (Test Visualization)</h1>
-    <p class="subtitle">Reads data/processed/county_year_normalized.csv. Use this for weekly validation without full app wiring.</p>
+    <p class="subtitle">Reads ../data/processed/county_year_normalized.csv. Use this for weekly validation without full app wiring.</p>
 
     <div id="error" class="error" style="display:none;"></div>
 
@@ -193,7 +193,7 @@
 </div>
 
 <script>
-    const DATA_PATH = 'data/processed/county_year_normalized.csv';
+    const DATA_PATH = '../data/processed/county_year_normalized.csv';
     const yearSelect = document.getElementById('yearSelect');
     const metricSelect = document.getElementById('metricSelect');
     const topN = document.getElementById('topN');
