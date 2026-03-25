@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
 const DATA_LOADING_APPROACH = 'frontend-static-csv';
 
 const DATASET_CATALOG = [
-    { name: 'crashes', file: 'Vehicle_Crashes_in_Iowa_20260312.csv', required: true },
+    // Note: Vehicle_Crashes_in_Iowa_20260312.csv is 323MB, too large for frontend loading
+    // Using processed normalized data instead which has all aggregated metrics
     { name: 'countyNormalized', file: 'processed/county_year_normalized.csv', required: true }
 ];
 
@@ -126,7 +127,9 @@ async function loadAllData() {
 }
 
 function buildMapReadyData() {
-    appState.crashPoints = dataProcessor.toMapReadyCrashPoints('crashes', { limit: 8000 });
+    // Skip crash points since crashes CSV is too large to load.
+    // Focus on county-level aggregated metrics from normalized CSV instead.
+    appState.crashPoints = [];
 
     Object.entries(LAYER_TO_METRIC_FIELD).forEach(([layerId, valueField]) => {
         appState.mapLayersByMetric[layerId] = dataProcessor.toMapReadyCountyMetrics('countyNormalized', {
@@ -180,6 +183,35 @@ function renderCurrentTabUI() {
     }
 
     renderLayerControls(currentTab.layers);
+    renderGraphLayerButtons(currentTab.layers);
+}
+
+function renderGraphLayerButtons(layers) {
+    const controlsContainer = document.getElementById('graph-layer-controls');
+    if (!controlsContainer) return;
+
+    controlsContainer.innerHTML = '';
+
+    layers.forEach((layer) => {
+        const isOn = Boolean(appState.visibleLayers[layer.id]);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `graph-layer-chip${isOn ? ' active' : ''}`;
+        button.textContent = `${layer.label}: ${isOn ? 'ON' : 'OFF'}`;
+
+        button.addEventListener('click', () => {
+            const nextValue = !Boolean(appState.visibleLayers[layer.id]);
+            appState.visibleLayers[layer.id] = nextValue;
+
+            const sidebarInput = document.querySelector(`#layer-controls input[data-layer-id="${layer.id}"]`);
+            if (sidebarInput) sidebarInput.checked = nextValue;
+
+            renderGraphLayerButtons(tabConfig[appState.activeTab].layers);
+            updateMapForCurrentState();
+        });
+
+        controlsContainer.appendChild(button);
+    });
 }
 
 /**
@@ -209,6 +241,7 @@ function renderLayerControls(layers) {
         input.addEventListener('change', (event) => {
             const layerId = event.target.dataset.layerId;
             appState.visibleLayers[layerId] = event.target.checked;
+            renderGraphLayerButtons(tabConfig[appState.activeTab].layers);
             updateMapForCurrentState();
         });
 
@@ -240,12 +273,209 @@ function updateMapForCurrentState() {
     renderBasicGraphs(prioritizedLayer, metricLayer);
 }
 
+function getVisibleMetricLayerIds() {
+    return Object.entries(appState.visibleLayers)
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([layerId]) => layerId)
+        .filter((layerId) => {
+            const layer = appState.mapLayersByMetric[layerId];
+            return Boolean(layer && layer.valuesByCounty);
+        });
+}
+
+function computePearsonPair(layerAId, layerBId) {
+    const layerA = appState.mapLayersByMetric[layerAId];
+    const layerB = appState.mapLayersByMetric[layerBId];
+    const valuesA = layerA?.valuesByCounty || {};
+    const valuesB = layerB?.valuesByCounty || {};
+
+    const counties = Object.keys(valuesA).filter((county) => Number.isFinite(valuesA[county]) && Number.isFinite(valuesB[county]));
+    if (counties.length < 3) {
+        return null;
+    }
+
+    const points = counties.map((county) => ({
+        county,
+        x: valuesA[county],
+        y: valuesB[county]
+    }));
+
+    const meanX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+    const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+
+    let numerator = 0;
+    let sumSqX = 0;
+    let sumSqY = 0;
+
+    points.forEach((p) => {
+        const dx = p.x - meanX;
+        const dy = p.y - meanY;
+        numerator += dx * dy;
+        sumSqX += dx * dx;
+        sumSqY += dy * dy;
+    });
+
+    const denominator = Math.sqrt(sumSqX * sumSqY);
+    if (!Number.isFinite(denominator) || denominator === 0) {
+        return null;
+    }
+
+    const r = numerator / denominator;
+    return {
+        layerAId,
+        layerBId,
+        layerALabel: LAYER_LABELS[layerAId] || layerAId,
+        layerBLabel: LAYER_LABELS[layerBId] || layerBId,
+        n: points.length,
+        r,
+        points
+    };
+}
+
+function buildCorrelationPairs(layerIds) {
+    const pairs = [];
+    for (let i = 0; i < layerIds.length; i++) {
+        for (let j = i + 1; j < layerIds.length; j++) {
+            const result = computePearsonPair(layerIds[i], layerIds[j]);
+            if (result) {
+                pairs.push(result);
+            }
+        }
+    }
+
+    return pairs.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+}
+
+function describeCorrelation(r) {
+    const absR = Math.abs(r);
+    const direction = r >= 0 ? 'positive' : 'negative';
+
+    let strength = 'very weak';
+    if (absR >= 0.7) {
+        strength = 'strong';
+    } else if (absR >= 0.4) {
+        strength = 'moderate';
+    } else if (absR >= 0.2) {
+        strength = 'weak';
+    }
+
+    return {
+        direction,
+        strength,
+        shortLabel: `${strength} ${direction}`,
+        sentence: `This is a ${strength} ${direction} relationship.`
+    };
+}
+
+function renderScatterSvg(pair) {
+    const width = 560;
+    const height = 260;
+    const pad = 30;
+    const xs = pair.points.map((p) => p.x);
+    const ys = pair.points.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    const xSpan = maxX - minX || 1;
+    const ySpan = maxY - minY || 1;
+
+    const meanX = xs.reduce((sum, v) => sum + v, 0) / xs.length;
+    const meanY = ys.reduce((sum, v) => sum + v, 0) / ys.length;
+    let numerator = 0;
+    let denominator = 0;
+    pair.points.forEach((p) => {
+        numerator += (p.x - meanX) * (p.y - meanY);
+        denominator += (p.x - meanX) * (p.x - meanX);
+    });
+    const slope = denominator === 0 ? 0 : numerator / denominator;
+    const intercept = meanY - slope * meanX;
+
+    const x1Val = minX;
+    const y1Val = slope * x1Val + intercept;
+    const x2Val = maxX;
+    const y2Val = slope * x2Val + intercept;
+
+    const x1 = pad;
+    const y1 = height - pad - ((y1Val - minY) / ySpan) * (height - pad * 2);
+    const x2 = width - pad;
+    const y2 = height - pad - ((y2Val - minY) / ySpan) * (height - pad * 2);
+
+    const circles = pair.points.map((p) => {
+        const x = pad + ((p.x - minX) / xSpan) * (width - pad * 2);
+        const y = height - pad - ((p.y - minY) / ySpan) * (height - pad * 2);
+        return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="3" class="scatter-point"><title>${p.county}: ${p.x.toFixed(2)}, ${p.y.toFixed(2)}</title></circle>`;
+    }).join('');
+
+    return `
+        <svg viewBox="0 0 ${width} ${height}" class="scatter-svg" role="img" aria-label="Scatter plot">
+            <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" class="axis-line"></line>
+            <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" class="axis-line"></line>
+            <line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" class="trend-line"></line>
+            ${circles}
+            <text x="${pad}" y="${height - pad + 14}" class="tick-label">${minX.toFixed(1)}</text>
+            <text x="${width - pad - 30}" y="${height - pad + 14}" class="tick-label">${maxX.toFixed(1)}</text>
+            <text x="${pad - 24}" y="${height - pad + 2}" class="tick-label">${minY.toFixed(1)}</text>
+            <text x="${pad - 24}" y="${pad + 2}" class="tick-label">${maxY.toFixed(1)}</text>
+            <text x="${width / 2}" y="${height - 6}" class="axis-label">${pair.layerALabel}</text>
+            <text x="14" y="${height / 2}" transform="rotate(-90 14 ${height / 2})" class="axis-label">${pair.layerBLabel}</text>
+        </svg>
+    `;
+}
+
+function renderCorrelationPanel() {
+    const layerIds = getVisibleMetricLayerIds();
+    if (layerIds.length < 2) {
+        return '<div class="correlation-empty">Enable at least 2 metric layers to view correlation graphs.</div>';
+    }
+
+    const pairs = buildCorrelationPairs(layerIds);
+    if (pairs.length === 0) {
+        return '<div class="correlation-empty">Not enough overlapping county data to calculate correlation.</div>';
+    }
+
+    const strongest = pairs[0];
+    const strongestDesc = describeCorrelation(strongest.r);
+    const strongestR2 = strongest.r * strongest.r;
+    const pairRows = pairs.map((pair) => {
+        const direction = pair.r >= 0 ? 'positive' : 'negative';
+        const desc = describeCorrelation(pair.r);
+        return `
+            <div class="corr-row ${direction}">
+                <span class="corr-pair">${pair.layerALabel} vs ${pair.layerBLabel}</span>
+                <span class="corr-r">r=${pair.r.toFixed(3)}</span>
+                <span class="corr-n">n=${pair.n}</span>
+                <span class="corr-desc">${desc.shortLabel}</span>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="correlation-section">
+            <h3>Correlation Graphs</h3>
+            <p class="correlation-subtitle">Pearson correlation across counties for active layers.</p>
+            <div class="correlation-grid">
+                <div class="correlation-list">
+                    ${pairRows}
+                </div>
+                <div class="scatter-card">
+                    <h4>Strongest Pair: ${strongest.layerALabel} vs ${strongest.layerBLabel}</h4>
+                    <p>r = ${strongest.r.toFixed(3)} · R² = ${strongestR2.toFixed(3)} · n = ${strongest.n}</p>
+                    <p class="corr-interpretation">${strongestDesc.sentence}</p>
+                    ${renderScatterSvg(strongest)}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderBasicGraphs(activeLayerId, metricLayer) {
     const container = document.getElementById('charts-container');
     if (!container) return;
 
     if (!activeLayerId || !metricLayer || !metricLayer.valuesByCounty) {
-        container.innerHTML = '<p>Select a layer to view chart summaries.</p>';
+        container.innerHTML = '<div class="empty-charts">Select a layer to view chart summaries.</div>';
         return;
     }
 
@@ -254,26 +484,29 @@ function renderBasicGraphs(activeLayerId, metricLayer) {
         .sort((a, b) => b[1] - a[1]);
 
     if (entries.length === 0) {
-        container.innerHTML = '<p>No graphable values for this layer.</p>';
+        container.innerHTML = '<div class="empty-charts">No graphable values for this layer.</div>';
         return;
     }
 
     const top10 = entries.slice(0, 10);
+    const bottom10 = entries.slice(-10).sort((a, b) => a[1] - b[1]);
     const max = top10[0][1] || 1;
     const avg = entries.reduce((sum, [, value]) => sum + value, 0) / entries.length;
+    const formatValue = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-    const bars = top10.map(([county, value]) => {
+    const toBars = (list) => list.map(([county, value]) => {
         const width = Math.max(2, (value / max) * 100);
         return `
             <div class="bar-row">
                 <span class="bar-label">${county}</span>
                 <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
-                <span class="bar-value">${value.toFixed(2)}</span>
+                <span class="bar-value">${formatValue(value)}</span>
             </div>
         `;
     }).join('');
 
     const title = LAYER_LABELS[activeLayerId] || activeLayerId;
+    const correlationPanel = renderCorrelationPanel();
 
     container.innerHTML = `
         <div class="graph-header">
@@ -281,11 +514,21 @@ function renderBasicGraphs(activeLayerId, metricLayer) {
             <p>Year ${metricLayer.year || 'N/A'} · Counties with values: ${entries.length}</p>
         </div>
         <div class="summary-grid">
-            <div class="summary-card"><strong>Average</strong><span>${avg.toFixed(2)}</span></div>
-            <div class="summary-card"><strong>Max</strong><span>${(metricLayer.max ?? 0).toFixed(2)}</span></div>
-            <div class="summary-card"><strong>Min</strong><span>${(metricLayer.min ?? 0).toFixed(2)}</span></div>
+            <div class="summary-card"><strong>Average</strong><span>${formatValue(avg)}</span></div>
+            <div class="summary-card"><strong>Max</strong><span>${formatValue(metricLayer.max ?? 0)}</span></div>
+            <div class="summary-card"><strong>Min</strong><span>${formatValue(metricLayer.min ?? 0)}</span></div>
         </div>
-        <div class="bars-wrap">${bars}</div>
+        <div class="dual-graphs">
+            <div class="graph-panel">
+                <h4>Top 10 Counties</h4>
+                <div class="bars-wrap">${toBars(top10)}</div>
+            </div>
+            <div class="graph-panel">
+                <h4>Bottom 10 Counties</h4>
+                <div class="bars-wrap">${toBars(bottom10)}</div>
+            </div>
+        </div>
+        ${correlationPanel}
     `;
 }
 
