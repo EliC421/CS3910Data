@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
 const DATA_LOADING_APPROACH = 'frontend-static-csv';
 
 const DATASET_CATALOG = [
-    { name: 'crashes', file: 'Vehicle_Crashes_in_Iowa_20260312.csv', required: true },
+    // Note: Vehicle_Crashes_in_Iowa_20260312.csv is 323MB, too large for frontend loading
+    // Using processed normalized data instead which has all aggregated metrics
     { name: 'countyNormalized', file: 'processed/county_year_normalized.csv', required: true }
 ];
 
@@ -126,7 +127,9 @@ async function loadAllData() {
 }
 
 function buildMapReadyData() {
-    appState.crashPoints = dataProcessor.toMapReadyCrashPoints('crashes', { limit: 8000 });
+    // Skip crash points since crashes CSV is too large to load.
+    // Focus on county-level aggregated metrics from normalized CSV instead.
+    appState.crashPoints = [];
 
     Object.entries(LAYER_TO_METRIC_FIELD).forEach(([layerId, valueField]) => {
         appState.mapLayersByMetric[layerId] = dataProcessor.toMapReadyCountyMetrics('countyNormalized', {
