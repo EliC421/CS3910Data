@@ -191,6 +191,7 @@ function renderCurrentTabUI() {
 function renderLayerControls(layers) {
     const controlsContainer = document.getElementById('layer-controls');
     if (!controlsContainer) return;
+    console.log('renderLayerControls called with:', layers);
 
     controlsContainer.innerHTML = '';
     appState.visibleLayers = {};
