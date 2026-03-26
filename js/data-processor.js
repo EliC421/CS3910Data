@@ -322,6 +322,88 @@ class DataProcessor {
         };
     }
 
+    toMapReadyLiquorStores(datasetName, options = {}) {
+        const {
+            yearField = 'year',
+            valueField = 'liquor_sale_dollars',
+            latField = 'lat',
+            lngField = 'lng',
+            preferredYear = null,
+            limit = 1200
+        } = options;
+
+        const dataset = this.datasets[datasetName];
+        if (!dataset || !valueField) {
+            return {
+                year: null,
+                min: null,
+                max: null,
+                stores: []
+            };
+        }
+
+        const byYear = new Map();
+
+        dataset.forEach((row) => {
+            const year = this.toNumber(row[yearField]);
+            const value = this.toNumber(row[valueField]);
+            const lat = this.toNumber(row[latField]);
+            const lng = this.toNumber(row[lngField]);
+
+            if (!Number.isFinite(year) || !Number.isFinite(value) || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+                return;
+            }
+
+            if (!byYear.has(year)) {
+                byYear.set(year, []);
+            }
+
+            byYear.get(year).push({
+                year,
+                storeNumber: row.store_number || row['Store Number'] || '',
+                storeName: row.store_name || row['Store Name'] || 'Unknown store',
+                address: row.address || row.Address || '',
+                city: row.city || row.City || '',
+                county: row.county || row.County || '',
+                transactions: this.toNumber(row.transactions) || 0,
+                saleDollars: value,
+                volumeLiters: this.toNumber(row.liquor_volume_liters) || 0,
+                bottlesSold: this.toNumber(row.liquor_bottles_sold) || 0,
+                lat,
+                lng
+            });
+        });
+
+        const years = Array.from(byYear.keys()).sort((a, b) => b - a);
+        const activeYear = (preferredYear && byYear.has(preferredYear))
+            ? preferredYear
+            : (years.find((year) => byYear.get(year).length >= 50) ?? years[0] ?? null);
+
+        const rows = activeYear !== null ? byYear.get(activeYear) : [];
+        if (!rows || rows.length === 0) {
+            return {
+                year: null,
+                min: null,
+                max: null,
+                stores: []
+            };
+        }
+
+        const sortedBySales = rows
+            .slice()
+            .sort((a, b) => b.saleDollars - a.saleDollars);
+
+        const selected = sortedBySales.slice(0, limit);
+        const values = selected.map((store) => store.saleDollars);
+
+        return {
+            year: activeYear,
+            min: Math.min(...values),
+            max: Math.max(...values),
+            stores: selected
+        };
+    }
+
     /**
      * Aggregate data by county or region
      */

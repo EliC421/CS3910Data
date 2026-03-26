@@ -195,3 +195,7 @@ Current county-level candidates in this repo:
 - Implement normalized/raw toggle for one dataset end-to-end.
 - Implement 2-layer map prototype with legend updates.
 - Add baseline correlation function and display $r$, $n$, and missing count.
+
+### Hosting
+- process 8 millions lines locally at the county level
+- AWS or Azure for hosting

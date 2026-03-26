@@ -85,6 +85,17 @@ function parseCsvLine(line) {
     return values;
 }
 
+function parsePointWkt(value) {
+    const match = String(value || '').match(/POINT\s*\(([-\d.]+)\s+([-\d.]+)\)/i);
+    if (!match) return null;
+
+    const lng = Number(match[1]);
+    const lat = Number(match[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    return { lat, lng };
+}
+
 async function streamCsvRows(filePath, onRow, progressStep = 100000) {
     const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
@@ -172,6 +183,7 @@ async function main() {
     const unemploymentAgg = new Map();
     const incomeAgg = new Map();
     const liquorAgg = new Map();
+    const liquorStoreAgg = new Map();
 
     console.log('Step 1/6: Parsing county population data...');
     await streamCsvRows(path.join(DATA_DIR, FILES.population), (row) => {
@@ -331,9 +343,41 @@ async function main() {
         }
 
         const item = liquorAgg.get(aggKey);
-        item.sale_dollars += toNumber(row['Sale (Dollars)']) || 0;
-        item.volume_liters += toNumber(row['Volume Sold (Liters)']) || 0;
-        item.bottles_sold += toNumber(row['Bottles Sold']) || 0;
+        const saleDollars = toNumber(row['Sale (Dollars)']) || 0;
+        const volumeLiters = toNumber(row['Volume Sold (Liters)']) || 0;
+        const bottlesSold = toNumber(row['Bottles Sold']) || 0;
+
+        item.sale_dollars += saleDollars;
+        item.volume_liters += volumeLiters;
+        item.bottles_sold += bottlesSold;
+
+        const storeNumber = String(row['Store Number'] || '').trim();
+        const storeLocation = parsePointWkt(row['Store Location']);
+        if (!storeNumber || !storeLocation) return;
+
+        const storeAggKey = `${storeNumber}|${year}`;
+        if (!liquorStoreAgg.has(storeAggKey)) {
+            liquorStoreAgg.set(storeAggKey, {
+                year,
+                store_number: storeNumber,
+                store_name: String(row['Store Name'] || '').trim(),
+                address: String(row['Address'] || '').trim(),
+                city: String(row['City'] || '').trim(),
+                county,
+                lat: storeLocation.lat,
+                lng: storeLocation.lng,
+                transactions: 0,
+                liquor_sale_dollars: 0,
+                liquor_volume_liters: 0,
+                liquor_bottles_sold: 0
+            });
+        }
+
+        const storeItem = liquorStoreAgg.get(storeAggKey);
+        storeItem.transactions += 1;
+        storeItem.liquor_sale_dollars += saleDollars;
+        storeItem.liquor_volume_liters += volumeLiters;
+        storeItem.liquor_bottles_sold += bottlesSold;
     }, 100000);
 
     console.log('Step 6/6: Writing processed and normalized outputs...');
@@ -525,6 +569,47 @@ async function main() {
         liquorRows
     );
 
+    const liquorStoreRows = Array.from(liquorStoreAgg.values())
+        .map((value) => ({
+            year: value.year,
+            store_number: value.store_number,
+            store_name: value.store_name,
+            address: value.address,
+            city: value.city,
+            county: value.county,
+            lat: value.lat,
+            lng: value.lng,
+            transactions: value.transactions,
+            liquor_sale_dollars: Math.round(value.liquor_sale_dollars),
+            liquor_volume_liters: Math.round(value.liquor_volume_liters),
+            liquor_bottles_sold: Math.round(value.liquor_bottles_sold)
+        }))
+        .sort((a, b) => {
+            if (a.year === b.year) {
+                return b.liquor_sale_dollars - a.liquor_sale_dollars;
+            }
+            return a.year - b.year;
+        });
+
+    writeCsv(
+        path.join(OUTPUT_DIR, 'liquor_store_year.csv'),
+        [
+            'year',
+            'store_number',
+            'store_name',
+            'address',
+            'city',
+            'county',
+            'lat',
+            'lng',
+            'transactions',
+            'liquor_sale_dollars',
+            'liquor_volume_liters',
+            'liquor_bottles_sold'
+        ],
+        liquorStoreRows
+    );
+
     writeCsv(
         path.join(OUTPUT_DIR, 'county_year_normalized.csv'),
         [
@@ -559,6 +644,7 @@ async function main() {
     console.log('- unemployment_county_year.csv');
     console.log('- income_county_year.csv');
     console.log('- liquor_county_year.csv');
+    console.log('- liquor_store_year.csv');
     console.log('- county_year_normalized.csv');
 }
 
