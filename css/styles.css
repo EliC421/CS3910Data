@@ -178,7 +178,7 @@ body {
     background: #f4dede;
     position: relative;
     flex-shrink: 0; */
-}
+} 
 /* Filled dot for checked state */
 .layer-toggle input:checked::after {
     content: "";
