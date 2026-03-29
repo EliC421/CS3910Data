@@ -148,35 +148,36 @@ body {
 .layer-controls {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .layer-toggle {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    /* justify-content: space-between; */
     gap: 10px;
-    padding: 12px 14px;
+    padding: 10px 12px;
     background: #fff;
     border: 1px solid #d7dde2;
-    border-radius: 999px;
+    border-radius: 12px;
     cursor: pointer;
 }
 
 .layer-toggle span {
     font-size: 0.96rem;
+    color: #22313f;
 }
 
 .layer-toggle input {
-    appearance: none;
-    -webkit-appearance: none;
+    appearance: auto;
+    -webkit-appearance: checkbox;
     width: 18px;
     height: 18px;
-    border: 1.5px solid #334155;
+    /* border: 1.5px solid #334155;
     border-radius: 50%;
     background: #f4dede;
     position: relative;
-    flex-shrink: 0;
+    flex-shrink: 0; */
 }
 /* Filled dot for checked state */
 .layer-toggle input:checked::after {
