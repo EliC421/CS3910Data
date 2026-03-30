@@ -22,6 +22,8 @@ jobs:
         with:
           submodules: true
           lfs: false
+      - name: Pull processed CSV LFS objects
+        run: git lfs pull --include="data/processed/*.csv" --exclude="*"
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
