@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iowa Data Visualization</title>
+    <title>Iowa County Insights Dashboard</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,9 +16,8 @@
     <div class="app">
         <header class="topbar">
             <div class="topbar-left">
-                <h1>Iowa Data Visualization Project</h1>
+                <h1>Iowa County Insights Dashboard</h1>
                 <p>Visualize Correlations in Iowa Data</p>
-                <p class="data-strategy">Loading strategy: <code id="data-loading-approach">pending</code></p>
             </div>
         </header>
 
@@ -30,8 +29,7 @@
             <section class="tabs-panel">
                 <div class="tab-list">
                     <button class="tab-button active" type="button" data-tab="dui-crashes">DUIs &amp; Crashes</button>
-                    <button class="tab-button" type="button" data-tab="offenders-alerts">Sex Offenders &amp; Amber Alerts</button>
-                    <button class="tab-button" type="button" data-tab="literacy-pbs">Literacy &amp; PBS Services</button>
+                    <button class="tab-button" type="button" data-tab="literacy-pbs">Literacy &amp; PBS Indicators</button>
                 </div>
             </section>
 
@@ -40,6 +38,7 @@
                 <section class="map-section">
                     <div class="card-header">
                         <h2 id="map-title">Liquor sales, DUI charges, and crashes</h2>
+                        <p id="layer-interpretation" class="layer-interpretation">Interpretation: Select a layer to see units and value context.</p>
                     </div>
             
                     <div class="map-shell">

@@ -17,6 +17,7 @@ This branch contains tools and scripts for processing Iowa government CSV data.
 - `unemployment_county_year.csv` - unemployment rate by county/year
 - `population_county_year.csv` - population by county/year
 - `probation_owi_county_year.csv` - OWI probation/reincarceration by county/year
+- `prison_admissions_year.csv` - statewide prison admissions by year (no county field)
 - `population_latest_county.csv` - latest year population per county
 
 **Map Architecture (March 25):**

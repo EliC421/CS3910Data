@@ -1,4 +1,4 @@
-# Iowa Data Visualization Project
+# Iowa County Insights Dashboard
 
 A web application that visualizes Iowa government data using Google Maps API to display heat maps and show correlations between different datasets.
 

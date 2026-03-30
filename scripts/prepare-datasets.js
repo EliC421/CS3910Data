@@ -11,8 +11,11 @@ const FILES = {
     probation: 'Iowa_Probation_Recidivism_Status_20260312.csv',
     unemployment: 'Iowa_Local_Area_Unemployment_Statistics.csv',
     income: 'Iowa_Median_Household_Income_in_the_Past_12_Months_(ACS_5-Year_Estimates)_20260312.csv',
-    liquor: 'Iowa_Liquor_Sales_20260312.csv'
+    liquor: 'Iowa_Liquor_Sales_20260312.csv',
+    prisonAdmissions: 'Iowa_Prison_Admissions_20260330.csv'
 };
+
+const REQUIRED_FILE_KEYS = ['crashes', 'population', 'probation', 'unemployment', 'income', 'liquor'];
 
 function normalizeCountyName(raw) {
     if (!raw) return '';
@@ -161,9 +164,16 @@ async function main() {
         fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     }
 
-    const missing = Object.entries(FILES)
-        .map(([name, file]) => ({ name, file, fullPath: path.join(DATA_DIR, file) }))
+    const missing = REQUIRED_FILE_KEYS
+        .map((name) => ({ name, file: FILES[name], fullPath: path.join(DATA_DIR, FILES[name]) }))
         .filter((entry) => !fs.existsSync(entry.fullPath));
+
+    const prisonAdmissionsPath = path.join(DATA_DIR, FILES.prisonAdmissions);
+    const hasPrisonAdmissions = fs.existsSync(prisonAdmissionsPath);
+
+    if (!hasPrisonAdmissions) {
+        console.log(`Optional dataset not found: ${FILES.prisonAdmissions}. Skipping prison admissions processing.`);
+    }
 
     if (missing.length > 0) {
         console.error('Missing required data files:');
@@ -184,8 +194,9 @@ async function main() {
     const incomeAgg = new Map();
     const liquorAgg = new Map();
     const liquorStoreAgg = new Map();
+    const prisonAdmissionsYearAgg = new Map();
 
-    console.log('Step 1/6: Parsing county population data...');
+    console.log('Step 1/7: Parsing county population data...');
     await streamCsvRows(path.join(DATA_DIR, FILES.population), (row) => {
         const county = normalizeCountyName(row['County']);
         const key = countyKey(county);
@@ -212,7 +223,7 @@ async function main() {
         populationYearsByCounty.set(key, sorted);
     }
 
-    console.log('Step 2/6: Parsing crash data and building county-year aggregates...');
+    console.log('Step 2/7: Parsing crash data and building county-year aggregates...');
     await streamCsvRows(path.join(DATA_DIR, FILES.crashes), (row) => {
         const county = normalizeCountyName(row['County Name']);
         const key = countyKey(county);
@@ -242,7 +253,7 @@ async function main() {
         }
     }, 100000);
 
-    console.log('Step 3/6: Parsing probation recidivism data...');
+    console.log('Step 3/7: Parsing probation recidivism data...');
     await streamCsvRows(path.join(DATA_DIR, FILES.probation), (row) => {
         const county = normalizeCountyName(row['Jurisdiction']);
         const key = countyKey(county);
@@ -272,7 +283,7 @@ async function main() {
         }
     }, 100000);
 
-    console.log('Step 4/6: Parsing unemployment and income control datasets...');
+    console.log('Step 4/7: Parsing unemployment and income control datasets...');
     await streamCsvRows(path.join(DATA_DIR, FILES.unemployment), (row) => {
         const areaType = (row['AREA TYPE'] || '').trim();
         const countyRaw = row['AREA NAME'] || '';
@@ -324,7 +335,7 @@ async function main() {
         });
     }, 100000);
 
-    console.log('Step 5/6: Parsing liquor sales data...');
+    console.log('Step 5/7: Parsing liquor sales data...');
     await streamCsvRows(path.join(DATA_DIR, FILES.liquor), (row) => {
         const county = normalizeCountyName(row['County']);
         const key = countyKey(county);
@@ -380,7 +391,64 @@ async function main() {
         storeItem.liquor_bottles_sold += bottlesSold;
     }, 100000);
 
-    console.log('Step 6/6: Writing processed and normalized outputs...');
+    console.log('Step 6/7: Parsing prison admissions data...');
+    if (hasPrisonAdmissions) {
+        await streamCsvRows(prisonAdmissionsPath, (row) => {
+            const year = parseYear(row['Fiscal Year Admitted']) || parseYear(row['Admission Date']);
+            if (!year) return;
+
+            if (!prisonAdmissionsYearAgg.has(year)) {
+                prisonAdmissionsYearAgg.set(year, {
+                    total_admissions: 0,
+                    female_admissions: 0,
+                    male_admissions: 0,
+                    owi_admissions: 0,
+                    violent_admissions: 0,
+                    drug_admissions: 0,
+                    property_admissions: 0,
+                    public_order_admissions: 0,
+                    other_admissions: 0,
+                    age_sum: 0,
+                    age_count: 0,
+                    months_served_sum: 0,
+                    months_served_count: 0
+                });
+            }
+
+            const item = prisonAdmissionsYearAgg.get(year);
+            item.total_admissions += 1;
+
+            const sex = String(row['Sex'] || '').trim().toUpperCase();
+            if (sex === 'FEMALE') item.female_admissions += 1;
+            if (sex === 'MALE') item.male_admissions += 1;
+
+            const offenseType = String(row['Offense Type'] || '').trim().toUpperCase();
+            if (offenseType === 'VIOLENT') item.violent_admissions += 1;
+            else if (offenseType === 'DRUG') item.drug_admissions += 1;
+            else if (offenseType === 'PROPERTY') item.property_admissions += 1;
+            else if (offenseType === 'PUBLIC ORDER') item.public_order_admissions += 1;
+            else item.other_admissions += 1;
+
+            const offenseSubtype = String(row['Offense Subtype'] || '').trim().toUpperCase();
+            if (offenseSubtype === 'OWI') {
+                item.owi_admissions += 1;
+            }
+
+            const age = toNumber(row['Age at Admission']);
+            if (age !== null) {
+                item.age_sum += age;
+                item.age_count += 1;
+            }
+
+            const monthsServed = toNumber(row['Months Served']);
+            if (monthsServed !== null) {
+                item.months_served_sum += monthsServed;
+                item.months_served_count += 1;
+            }
+        }, 100000);
+    }
+
+    console.log('Step 7/7: Writing processed and normalized outputs...');
 
     const crashRows = mapToSortedRows(crashAgg, countyNameByKey, (county, year, value) => ({
         county,
@@ -610,6 +678,44 @@ async function main() {
         liquorStoreRows
     );
 
+    if (hasPrisonAdmissions) {
+        const prisonAdmissionsRows = Array.from(prisonAdmissionsYearAgg.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([year, value]) => ({
+                year,
+                total_admissions: value.total_admissions,
+                female_admissions: value.female_admissions,
+                male_admissions: value.male_admissions,
+                violent_admissions: value.violent_admissions,
+                drug_admissions: value.drug_admissions,
+                property_admissions: value.property_admissions,
+                public_order_admissions: value.public_order_admissions,
+                other_admissions: value.other_admissions,
+                owi_admissions: value.owi_admissions,
+                average_age_at_admission: value.age_count > 0 ? (value.age_sum / value.age_count).toFixed(2) : '',
+                average_months_served: value.months_served_count > 0 ? (value.months_served_sum / value.months_served_count).toFixed(2) : ''
+            }));
+
+        writeCsv(
+            path.join(OUTPUT_DIR, 'prison_admissions_year.csv'),
+            [
+                'year',
+                'total_admissions',
+                'female_admissions',
+                'male_admissions',
+                'violent_admissions',
+                'drug_admissions',
+                'property_admissions',
+                'public_order_admissions',
+                'other_admissions',
+                'owi_admissions',
+                'average_age_at_admission',
+                'average_months_served'
+            ],
+            prisonAdmissionsRows
+        );
+    }
+
     writeCsv(
         path.join(OUTPUT_DIR, 'county_year_normalized.csv'),
         [
@@ -645,6 +751,9 @@ async function main() {
     console.log('- income_county_year.csv');
     console.log('- liquor_county_year.csv');
     console.log('- liquor_store_year.csv');
+    if (hasPrisonAdmissions) {
+        console.log('- prison_admissions_year.csv');
+    }
     console.log('- county_year_normalized.csv');
 }
 

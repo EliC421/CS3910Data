@@ -80,7 +80,7 @@
         return { slope, intercept };
     }
 
-    function toScatterPlotScales(pair, width, height, pad) {
+    function toScatterPlotScales(pair, width, height) {
         const xs = pair.points.map((point) => point.x);
         const ys = pair.points.map((point) => point.y);
         const minX = Math.min(...xs);
@@ -96,22 +96,32 @@
             xSpan: maxX - minX || 1,
             ySpan: maxY - minY || 1,
             width,
-            height,
-            pad
+            height
         };
     }
 
     function toScatterCoordinates(point, scales) {
-        const x = scales.pad + ((point.x - scales.minX) / scales.xSpan) * (scales.width - scales.pad * 2);
-        const y = scales.height - scales.pad - ((point.y - scales.minY) / scales.ySpan) * (scales.height - scales.pad * 2);
+        const x = ((point.x - scales.minX) / scales.xSpan) * scales.width;
+        const y = scales.height - ((point.y - scales.minY) / scales.ySpan) * scales.height;
         return { x, y };
     }
 
-    function renderScatterPoints(pair, scales) {
+    function renderScatterPoints(pair, scales, offsetX, offsetY) {
         return pair.points.map((point) => {
             const plotted = toScatterCoordinates(point, scales);
-            return `<circle cx="${plotted.x.toFixed(2)}" cy="${plotted.y.toFixed(2)}" r="3" class="scatter-point"><title>${point.county}: ${point.x.toFixed(2)}, ${point.y.toFixed(2)}</title></circle>`;
+            return `<circle cx="${(offsetX + plotted.x).toFixed(2)}" cy="${(offsetY + plotted.y).toFixed(2)}" r="3" class="scatter-point"><title>${point.county}: ${point.x.toFixed(2)}, ${point.y.toFixed(2)}</title></circle>`;
         }).join('');
+    }
+
+    function formatAxisValue(value) {
+        if (!Number.isFinite(value)) return 'N/A';
+
+        const abs = Math.abs(value);
+        if (abs >= 1000) {
+            return Math.round(value).toLocaleString();
+        }
+
+        return value.toFixed(2);
     }
 
     function describeCorrelation(r) {
@@ -136,10 +146,12 @@
     }
 
     function renderScatterSvg(pair) {
-        const width = 560;
-        const height = 260;
-        const pad = 30;
-        const scales = toScatterPlotScales(pair, width, height, pad);
+        const width = 640;
+        const height = 320;
+        const margin = { top: 18, right: 18, bottom: 56, left: 78 };
+        const plotWidth = width - margin.left - margin.right;
+        const plotHeight = height - margin.top - margin.bottom;
+        const scales = toScatterPlotScales(pair, plotWidth, plotHeight);
         const trend = calculateLinearTrend(pair.points);
 
         const x1Val = scales.minX;
@@ -147,24 +159,24 @@
         const x2Val = scales.maxX;
         const y2Val = trend.slope * x2Val + trend.intercept;
 
-        const x1 = pad;
-        const y1 = height - pad - ((y1Val - scales.minY) / scales.ySpan) * (height - pad * 2);
-        const x2 = width - pad;
-        const y2 = height - pad - ((y2Val - scales.minY) / scales.ySpan) * (height - pad * 2);
-        const circles = renderScatterPoints(pair, scales);
+        const x1 = margin.left;
+        const y1 = margin.top + (plotHeight - ((y1Val - scales.minY) / scales.ySpan) * plotHeight);
+        const x2 = width - margin.right;
+        const y2 = margin.top + (plotHeight - ((y2Val - scales.minY) / scales.ySpan) * plotHeight);
+        const circles = renderScatterPoints(pair, scales, margin.left, margin.top);
 
         return `
         <svg viewBox="0 0 ${width} ${height}" class="scatter-svg" role="img" aria-label="Scatter plot">
-            <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" class="axis-line"></line>
-            <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" class="axis-line"></line>
+            <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="axis-line"></line>
+            <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="axis-line"></line>
             <line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" class="trend-line"></line>
             ${circles}
-            <text x="${pad}" y="${height - pad + 14}" class="tick-label">${scales.minX.toFixed(1)}</text>
-            <text x="${width - pad - 30}" y="${height - pad + 14}" class="tick-label">${scales.maxX.toFixed(1)}</text>
-            <text x="${pad - 24}" y="${height - pad + 2}" class="tick-label">${scales.minY.toFixed(1)}</text>
-            <text x="${pad - 24}" y="${pad + 2}" class="tick-label">${scales.maxY.toFixed(1)}</text>
-            <text x="${width / 2}" y="${height - 6}" class="axis-label">${pair.layerALabel}</text>
-            <text x="14" y="${height / 2}" transform="rotate(-90 14 ${height / 2})" class="axis-label">${pair.layerBLabel}</text>
+            <text x="${margin.left}" y="${height - margin.bottom + 16}" class="tick-label">${formatAxisValue(scales.minX)}</text>
+            <text x="${width - margin.right}" y="${height - margin.bottom + 16}" text-anchor="end" class="tick-label">${formatAxisValue(scales.maxX)}</text>
+            <text x="${margin.left - 10}" y="${height - margin.bottom + 4}" text-anchor="end" class="tick-label">${formatAxisValue(scales.minY)}</text>
+            <text x="${margin.left - 10}" y="${margin.top + 4}" text-anchor="end" class="tick-label">${formatAxisValue(scales.maxY)}</text>
+            <text x="${margin.left + plotWidth / 2}" y="${height - 8}" text-anchor="middle" class="axis-label">${pair.layerALabel}</text>
+            <text x="18" y="${margin.top + plotHeight / 2}" transform="rotate(-90 18 ${margin.top + plotHeight / 2})" text-anchor="middle" class="axis-label">${pair.layerBLabel}</text>
         </svg>
     `;
     }
@@ -207,18 +219,20 @@
         const strongest = pairs[0];
         const strongestDesc = describeCorrelation(strongest.r);
         const strongestR2 = strongest.r * strongest.r;
-        const pairRows = pairs.map((pair) => {
+        const pairRows = pairs.slice(0, 5).map((pair) => {
             const direction = pair.r >= 0 ? 'positive' : 'negative';
             const desc = describeCorrelation(pair.r);
             return `
             <div class="corr-row ${direction}">
                 <span class="corr-pair">${pair.layerALabel} vs ${pair.layerBLabel}</span>
-                <span class="corr-r">r=${pair.r.toFixed(3)}</span>
-                <span class="corr-n">n=${pair.n}</span>
-                <span class="corr-desc">${desc.shortLabel}</span>
+                <span class="corr-meta">r=${pair.r.toFixed(3)} · n=${pair.n} · ${desc.shortLabel}</span>
             </div>
         `;
         }).join('');
+
+        const additionalPairsNote = pairs.length > 5
+            ? `<p class="correlation-note">Showing top 5 of ${pairs.length} correlation pairs.</p>`
+            : '';
 
         return `
         <div class="correlation-section">
@@ -227,10 +241,12 @@
             <div class="correlation-grid">
                 <div class="correlation-list">
                     ${pairRows}
+                    ${additionalPairsNote}
                 </div>
                 <div class="scatter-card">
                     <h4>Strongest Pair: ${strongest.layerALabel} vs ${strongest.layerBLabel}</h4>
                     <p>r = ${strongest.r.toFixed(3)} · R² = ${strongestR2.toFixed(3)} · n = ${strongest.n}</p>
+                    <p class="corr-metrics-help"><strong>How to read:</strong> r shows direction/strength (-1 to +1), R² shows percent of variation explained (0 to 1), n is number of counties used.</p>
                     <p class="corr-interpretation">${strongestDesc.sentence}</p>
                     ${renderScatterSvg(strongest)}
                 </div>

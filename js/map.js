@@ -1,6 +1,23 @@
 let mapInstance = null;
 let liquorStoreOverlays = [];
 
+function formatMetricValue(value, layerMeta) {
+  if (!Number.isFinite(value)) return "No data";
+
+  switch (layerMeta?.format) {
+    case "currency":
+      return `$${Math.round(value).toLocaleString()}`;
+    case "percent":
+      return `${value.toFixed(2)}%`;
+    case "per100k":
+      return `${value.toFixed(2)} per 100,000 residents`;
+    case "count":
+      return `${value.toFixed(2)} people`;
+    default:
+      return value.toFixed(2);
+  }
+}
+
 function normalizeCountyKey(value) {
   return String(value || "")
     .trim()
@@ -148,6 +165,7 @@ function initMap() {
       "Unknown county";
     const countyKey = normalizeCountyKey(countyName);
     const selectedLayer = window.__activeMetricLayer || null;
+    const layerMeta = window.__activeLayerMeta || null;
     const value = selectedLayer?.valuesByCounty?.[countyKey] ?? null;
     const year = selectedLayer?.year ?? null;
 
@@ -160,9 +178,11 @@ function initMap() {
       if (value === null) {
         body.textContent = "No metric value available for the active layer.";
       } else {
+        const metricName = layerMeta?.displayName || "Metric";
+        const formattedValue = formatMetricValue(value, layerMeta);
         body.textContent = year
-          ? `Year ${year}: ${value.toFixed(3)}`
-          : `Value: ${value.toFixed(3)}`;
+          ? `Year ${year} - ${metricName}: ${formattedValue}`
+          : `${metricName}: ${formattedValue}`;
       }
       card.classList.remove("hidden");
     }
@@ -185,9 +205,11 @@ function updateMapLayers(_activeTab, _visibleLayers, payload = {}) {
   if (!mapInstance) return;
 
   const metricLayer = payload.metricLayer || null;
+  const layerMeta = payload.layerMeta || null;
   const selectedLayerId = payload.selectedLayerId || null;
   const liquorStoreLayer = payload.liquorStoreLayer || null;
   window.__activeMetricLayer = metricLayer;
+  window.__activeLayerMeta = layerMeta;
 
   const valuesByCounty = metricLayer?.valuesByCounty || {};
   const min = metricLayer?.min;

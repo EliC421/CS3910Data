@@ -3,7 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Iowa Data Visualization App Loaded');
+    console.log('Iowa County Insights Dashboard Loaded');
     initializeApp();
 });
 
@@ -20,20 +20,51 @@ const LAYER_TO_METRIC_FIELD = {
     liquorSales: 'liquor_dollars_per_100k',
     duiCharges: 'owi_probation_per_100k',
     crashes: 'impaired_crashes_per_100k',
-    incarceration: 'owi_reincarcerated',
     readingProficiency: 'median_household_income',
     mathProficiency: 'median_household_income',
     pbsServices: 'unemployment_rate'
 };
 
 const LAYER_LABELS = {
-    liquorSales: 'Liquor Sales (per 100k)',
-    duiCharges: 'DUI Proxy (OWI probation per 100k)',
-    crashes: 'Impaired Crashes (per 100k)',
-    incarceration: 'OWI Reincarceration (count)',
-    readingProficiency: 'Median Household Income',
-    mathProficiency: 'Median Household Income',
-    pbsServices: 'Unemployment Rate'
+    liquorSales: 'Liquor Sales (USD per 100k residents)',
+    duiCharges: 'OWI Probation (cases per 100k residents)',
+    crashes: 'Impaired Crashes (cases per 100k residents)',
+    readingProficiency: 'Median Household Income (reading indicator)',
+    mathProficiency: 'Median Household Income (math indicator)',
+    pbsServices: 'Unemployment Rate (PBS indicator)'
+};
+
+const LAYER_INTERPRETATION = {
+    liquorSales: {
+        displayName: 'Liquor Sales',
+        format: 'currency',
+        example: 'Interpretation: value is total liquor sales dollars per 100,000 residents. Example: 250000 means $250,000 per 100,000 residents.'
+    },
+    duiCharges: {
+        displayName: 'OWI Probation',
+        format: 'per100k',
+        example: 'Interpretation: value is OWI probation cases per 100,000 residents. Example: 3.46 means 3.46 cases per 100,000 residents.'
+    },
+    crashes: {
+        displayName: 'Impaired Crashes',
+        format: 'per100k',
+        example: 'Interpretation: value is impaired-driving crash cases per 100,000 residents. Example: 3.46 means 3.46 crashes per 100,000 residents.'
+    },
+    readingProficiency: {
+        displayName: 'Median Household Income (reading indicator)',
+        format: 'currency',
+        example: 'Interpretation: this layer uses median household income as a reading indicator, not a direct reading score. Example: 63450 means $63,450 median household income.'
+    },
+    mathProficiency: {
+        displayName: 'Median Household Income (math indicator)',
+        format: 'currency',
+        example: 'Interpretation: this layer uses median household income as a math indicator, not a direct math score. Example: 63450 means $63,450 median household income.'
+    },
+    pbsServices: {
+        displayName: 'Unemployment Rate (PBS indicator)',
+        format: 'percent',
+        example: 'Interpretation: this layer uses unemployment as a PBS service indicator, not a direct service-count measure. Example: 3.46 means 3.46% unemployment.'
+    }
 };
 
 /**
@@ -48,21 +79,27 @@ const tabConfig = {
             { id: "crashes", label: "Crashes", checked: false }
         ]
     },
-    "offenders-alerts": {
-        mapTitle: "Sex offenders, Amber Alerts, and incarceration",
-        layers: [
-            { id: "incarceration", label: "Incarceration Data", checked: true }
-        ]
-    },
     "literacy-pbs": {
-        mapTitle: "Reading, math, and PBS services",
+        mapTitle: "Literacy and PBS Indicators",
         layers: [
-            { id: "readingProficiency", label: "Reading Proficiency", checked: true },
-            { id: "mathProficiency", label: "Math Proficiency", checked: false },
-            { id: "pbsServices", label: "PBS Services", checked: true }
+            { id: "readingProficiency", label: "Median Household Income (reading indicator)", checked: true },
+            { id: "mathProficiency", label: "Median Household Income (math indicator)", checked: false },
+            { id: "pbsServices", label: "Unemployment Rate (PBS indicator)", checked: true }
         ]
     }
 };
+
+function updateLayerInterpretation(layerId) {
+    const node = document.getElementById('layer-interpretation');
+    if (!node) return;
+
+    if (!layerId || !LAYER_INTERPRETATION[layerId]) {
+        node.textContent = 'Interpretation: Select a layer to see units and value context.';
+        return;
+    }
+
+    node.textContent = LAYER_INTERPRETATION[layerId].example;
+}
 
 /**
  * Main application state
@@ -80,11 +117,6 @@ const appState = {
  */
 async function initializeApp() {
     try {
-        const loadingApproachNode = document.getElementById('data-loading-approach');
-        if (loadingApproachNode) {
-            loadingApproachNode.textContent = DATA_LOADING_APPROACH;
-        }
-
         await loadAllData();
         buildMapReadyData();
         setupEventListeners();
@@ -182,6 +214,8 @@ function renderCurrentTabUI() {
         mapTitle.textContent = currentTab.mapTitle;
     }
 
+    updateLayerInterpretation(null);
+
     renderLayerControls(currentTab.layers);
     renderGraphLayerButtons(currentTab.layers);
 }
@@ -261,11 +295,15 @@ function updateMapForCurrentState() {
 
     const prioritizedLayer = activeLayerIds.find((layerId) => layerId in LAYER_TO_METRIC_FIELD) || null;
     const metricLayer = prioritizedLayer ? appState.mapLayersByMetric[prioritizedLayer] : null;
+    const layerMeta = prioritizedLayer ? LAYER_INTERPRETATION[prioritizedLayer] : null;
+
+    updateLayerInterpretation(prioritizedLayer);
 
     if (typeof updateMapLayers === 'function') {
         updateMapLayers(appState.activeTab, appState.visibleLayers, {
             selectedLayerId: prioritizedLayer,
             metricLayer,
+            layerMeta,
             crashPoints: appState.crashPoints,
             liquorStoreLayer: prioritizedLayer === 'liquorSales' ? appState.liquorStoreLayer : null
         });
