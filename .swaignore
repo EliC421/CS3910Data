@@ -1,0 +1,15 @@
+# Exclude heavy raw datasets from deployment
+data/*.csv
+
+# Keep files needed by the live app
+!data/processed/*.csv
+!data/IowaCounties.geojson
+!data/README.md
+
+# Exclude dev-only files/folders
+scripts/
+test/
+*.ps1
+audit-data-readiness.js
+verify-schemas.js
+debug-csv.js
